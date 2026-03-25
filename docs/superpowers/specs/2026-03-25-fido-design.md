@@ -57,7 +57,8 @@ Each stage produces a markdown report. The presence of a file indicates stage co
     └── <dd-issue-id>/
         ├── error.md
         ├── investigation.md
-        └── fix.md
+        ├── fix.md
+        └── resolve.json
 ```
 
 ### Report Contents
@@ -78,10 +79,25 @@ Each stage produces a markdown report. The presence of a file indicates stage co
 - Confidence level / complexity estimate
 
 **`fix.md`** (from `fido fix`):
-- Branch name
+- Summary of changes made
+- Reasoning behind the approach
 - Files changed (diff summary)
-- MR URL (GitLab draft)
 - Test results if applicable
+
+**`resolve.json`** (written by Fido after `fido fix` completes):
+Structured metadata for the web UI and downstream tooling:
+```json
+{
+  "branch": "fix/abc123-null-pointer-in-handler",
+  "mr_url": "https://gitlab.com/ruter-as/.../merge_requests/42",
+  "mr_status": "draft",
+  "service": "drt-services",
+  "datadog_issue_id": "abc123",
+  "datadog_url": "https://app.datadoghq.eu/...",
+  "created_at": "2026-03-25T10:30:00Z"
+}
+```
+This file is written by Fido core (not the agent) by parsing the agent's output and `glab` results. It serves as the machine-readable record of the fix, keeping `fix.md` as a pure agent narrative.
 
 ## CLI Commands
 
@@ -223,7 +239,7 @@ Agents that don't follow the `<cmd> <file> --cwd <dir>` convention can be wrappe
 MR creation is handled by the fix agent, not Fido core. Fido provides instructions in the prompt:
 
 - **Branch naming:** `fix/<issue-id>-<short-description>`
-- **MR title:** `fix(<service-name>): <short description>` (conventional commits)
+- **MR title:** `fix(fido): <short description>` (conventional commits)
 - **MR description:** populated from `investigation.md` summary + Datadog link
 - **Draft:** always true
 - **Assignee:** the developer running Fido (from git config or `config.yml`)
