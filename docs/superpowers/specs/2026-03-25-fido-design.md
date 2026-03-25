@@ -260,16 +260,16 @@ The Go binary exposes a REST API via `fido serve`:
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/reports` | List all issues with stage status. Supports `?service=` and `?status=` filters |
-| `GET` | `/api/reports/:id` | Get all reports for an issue |
-| `POST` | `/api/reports/:id/investigate` | Trigger `fido investigate` for an issue |
-| `POST` | `/api/reports/:id/fix` | Trigger `fido fix` for an issue |
-| `GET` | `/api/reports/:id/progress` | SSE stream of agent output for a running action |
+| `GET` | `/api/issues` | List all issues with stage status. Supports `?service=` and `?status=` filters |
+| `GET` | `/api/issues/:id` | Get issue detail including all stage reports and resolve.json |
+| `POST` | `/api/issues/:id/investigate` | Trigger `fido investigate` for an issue |
+| `POST` | `/api/issues/:id/fix` | Trigger `fido fix` for an issue |
+| `GET` | `/api/issues/:id/progress` | SSE stream of agent output for a running action |
 | `GET` | `/api/config` | Get current configuration |
 | `PUT` | `/api/config` | Update configuration |
 | `POST` | `/api/scan` | Trigger an immediate scan |
 
-Long-running actions (`investigate`, `fix`, `scan`) return immediately with `202 Accepted`. The client subscribes to `/api/reports/:id/progress` (Server-Sent Events) keyed by issue ID to stream agent output in real time. Only one action per issue can run at a time — a second request returns `409 Conflict`.
+Long-running actions (`investigate`, `fix`, `scan`) return immediately with `202 Accepted`. The client subscribes to `/api/issues/:id/progress` (Server-Sent Events) keyed by issue ID to stream agent output in real time. Only one action per issue can run at a time — a second request returns `409 Conflict`.
 
 Error responses use standard HTTP status codes with a JSON body: `{ "error": "<message>" }`.
 
