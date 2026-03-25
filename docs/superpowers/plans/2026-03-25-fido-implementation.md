@@ -1815,11 +1815,14 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) e
 		return fmt.Errorf("writing fix report: %w", err)
 	}
 
-	// Write resolve.json with available metadata
-	// In a real run the agent output would be parsed for branch/MR info
+	// Parse branch and MR URL from agent output using known patterns
 	resolve := &reports.ResolveData{
+		Branch:         parseField(output, "Branch"),
+		MRURL:          parseField(output, "MR URL"),
+		MRStatus:       "draft",
 		Service:        service,
 		DatadogIssueID: issueID,
+		DatadogURL:     fmt.Sprintf("https://app.%s/error-tracking/issue/%s", cfg.Datadog.Site, issueID),
 	}
 	if err := mgr.WriteResolve(issueID, resolve); err != nil {
 		return fmt.Errorf("writing resolve data: %w", err)
@@ -1827,6 +1830,19 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) e
 
 	fmt.Printf("Fix complete for %s\n", issueID)
 	return nil
+}
+
+// parseField extracts a value from agent output like "- **Branch:** fix/issue-123-desc"
+func parseField(content, field string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Match "- **Field:** value" or "**Field:** value"
+		prefix := "**" + field + ":**"
+		if idx := strings.Index(trimmed, prefix); idx != -1 {
+			return strings.TrimSpace(trimmed[idx+len(prefix):])
+		}
+	}
+	return ""
 }
 
 func init() {
@@ -2296,7 +2312,12 @@ import (
 	"github.com/ruter-as/fido/internal/reports"
 )
 
-func NewServer(mgr *reports.Manager, cfg *config.Config) http.Handler {
+type Server struct {
+	handler  http.Handler
+	handlers *Handlers
+}
+
+func NewServer(mgr *reports.Manager, cfg *config.Config) *Server {
 	h := NewHandlers(mgr, cfg)
 
 	r := chi.NewRouter()
@@ -2313,7 +2334,15 @@ func NewServer(mgr *reports.Manager, cfg *config.Config) http.Handler {
 		r.Post("/scan", h.TriggerScan)
 	})
 
-	return r
+	return &Server{handler: r, handlers: h}
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.handler.ServeHTTP(w, r)
+}
+
+func GetHandlers(s *Server) *Handlers {
+	return s.handlers
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -2345,6 +2374,7 @@ import (
 	"path/filepath"
 
 	"github.com/ruter-as/fido/internal/api"
+	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
@@ -2358,7 +2388,34 @@ var serveCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
+		ddClient := datadog.NewClient(
+			cfg.Datadog.APIKey,
+			cfg.Datadog.AppKey,
+			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
+		)
+
 		server := api.NewServer(mgr, cfg)
+		// Inject action functions so API handlers can trigger CLI operations
+		handlers := api.GetHandlers(server)
+		handlers.SetScanFunc(func() error {
+			count, err := runScan(cfg, ddClient, mgr)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("API scan complete: %d new issues\n", count)
+			return nil
+		})
+		handlers.SetInvestigateFunc(func(issueID string) error {
+			errorContent, _ := mgr.ReadError(issueID)
+			service := extractServiceFromReport(errorContent)
+			return runInvestigate(issueID, service, cfg, mgr)
+		})
+		handlers.SetFixFunc(func(issueID string) error {
+			errorContent, _ := mgr.ReadError(issueID)
+			service := extractServiceFromReport(errorContent)
+			return runFix(issueID, service, cfg, mgr)
+		})
+
 		fmt.Printf("Fido API server listening on :%s\n", port)
 		return http.ListenAndServe(":"+port, server)
 	},
