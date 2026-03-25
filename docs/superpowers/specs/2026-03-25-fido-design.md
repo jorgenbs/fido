@@ -170,17 +170,19 @@ Fido invokes agents using a simple contract:
 2. Fido executes the agent command as: `<agent-command> <prompt-file-path> --cwd <repo-path>`
 3. Fido captures the agent's **stdout** as the stage report (written to `investigation.md` or `fix.md`)
 
-The agent command in `config.yml` is a command prefix. Fido appends the prompt file path and working directory:
+The agent command in `config.yml` is a command prefix. Fido appends the prompt file path as an argument and sets the **working directory of the subprocess** to the repo path (not passed as a CLI flag):
 
 ```bash
 # Config: agent.investigate = "claude -p"
-# Fido runs:
-claude -p /tmp/fido-prompt-abc123.md --cwd /path/to/repo > ~/.fido/reports/abc123/investigation.md
+# Fido runs (cwd set to /path/to/repo):
+cd /path/to/repo && claude -p /tmp/fido-prompt-abc123.md > ~/.fido/reports/abc123/investigation.md
 
 # Config: agent.investigate = "python my_agent.py"
-# Fido runs:
-python my_agent.py /tmp/fido-prompt-abc123.md --cwd /path/to/repo > ~/.fido/reports/abc123/investigation.md
+# Fido runs (cwd set to /path/to/repo):
+cd /path/to/repo && python my_agent.py /tmp/fido-prompt-abc123.md > ~/.fido/reports/abc123/investigation.md
 ```
+
+The repo path is also included in the prompt file for agents that need it explicitly.
 
 The `--agent` CLI flag overrides the config and takes a full command prefix (same semantics).
 
@@ -251,7 +253,7 @@ The Go binary exposes a REST API via `fido serve`:
 | `PUT` | `/api/config` | Update configuration |
 | `POST` | `/api/scan` | Trigger an immediate scan |
 
-Long-running actions (`investigate`, `fix`, `scan`) return immediately with a `202 Accepted` and a job ID. The client subscribes to `/api/reports/:id/progress` (Server-Sent Events) to stream agent output in real time.
+Long-running actions (`investigate`, `fix`, `scan`) return immediately with `202 Accepted`. The client subscribes to `/api/reports/:id/progress` (Server-Sent Events) keyed by issue ID to stream agent output in real time. Only one action per issue can run at a time — a second request returns `409 Conflict`.
 
 Error responses use standard HTTP status codes with a JSON body: `{ "error": "<message>" }`.
 
