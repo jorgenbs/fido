@@ -269,6 +269,30 @@ The Go binary exposes a REST API via `fido serve`:
 | `PUT` | `/api/config` | Update configuration |
 | `POST` | `/api/scan` | Trigger an immediate scan |
 
+**`GET /api/issues/:id` response shape:**
+
+```json
+{
+  "id": "abc123",
+  "stage": "fixed",
+  "service": "drt-services",
+  "error": "... error.md content ...",
+  "investigation": "... investigation.md content or null ...",
+  "fix": "... fix.md content or null ...",
+  "resolve": {
+    "branch": "fix/abc123-null-pointer-in-handler",
+    "mr_url": "https://gitlab.com/ruter-as/.../merge_requests/42",
+    "mr_status": "draft",
+    "service": "drt-services",
+    "datadog_issue_id": "abc123",
+    "datadog_url": "https://app.datadoghq.eu/...",
+    "created_at": "2026-03-25T10:30:00Z"
+  }
+}
+```
+
+The `stage` field is derived from which files exist: `"scanned"` (only error.md), `"investigated"` (+ investigation.md), `"fixed"` (+ fix.md + resolve.json). The `resolve` field is `null` unless the issue has reached the fixed stage.
+
 Long-running actions (`investigate`, `fix`, `scan`) return immediately with `202 Accepted`. The client subscribes to `/api/issues/:id/progress` (Server-Sent Events) keyed by issue ID to stream agent output in real time. Only one action per issue can run at a time — a second request returns `409 Conflict`.
 
 Error responses use standard HTTP status codes with a JSON body: `{ "error": "<message>" }`.
