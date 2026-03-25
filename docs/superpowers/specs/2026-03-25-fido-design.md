@@ -162,29 +162,59 @@ This is a simple, explicit mapping. Future enhancement: auto-populate from the `
 
 Fido is agent-agnostic. The `investigate` and `fix` stages shell out to a configurable command.
 
-### How It Works
+### Invocation Contract
 
-1. Fido assembles context (error report + repo path) into a prompt file
-2. Shells out to the configured agent command, passing the prompt file path
-3. Captures the agent's stdout as the stage report
+Fido invokes agents using a simple contract:
+
+1. Fido writes a **prompt file** (markdown) to a temp location containing all context the agent needs
+2. Fido executes the agent command as: `<agent-command> <prompt-file-path> --cwd <repo-path>`
+3. Fido captures the agent's **stdout** as the stage report (written to `investigation.md` or `fix.md`)
+
+The agent command in `config.yml` is a command prefix. Fido appends the prompt file path and working directory:
 
 ```bash
-# Example: what fido does for "fido investigate abc123"
-claude -p "$(cat /tmp/fido-prompt-abc123.md)" --cwd /path/to/repo > ~/.fido/reports/abc123/investigation.md
+# Config: agent.investigate = "claude -p"
+# Fido runs:
+claude -p /tmp/fido-prompt-abc123.md --cwd /path/to/repo > ~/.fido/reports/abc123/investigation.md
+
+# Config: agent.investigate = "python my_agent.py"
+# Fido runs:
+python my_agent.py /tmp/fido-prompt-abc123.md --cwd /path/to/repo > ~/.fido/reports/abc123/investigation.md
 ```
+
+The `--agent` CLI flag overrides the config and takes a full command prefix (same semantics).
+
+### Prompt Templates
+
+Fido uses built-in prompt templates for each stage. The prompt file includes:
+
+**Investigate prompt:**
+- The full `error.md` content
+- Repo path
+- Instructions: analyze the error, identify root cause, list affected files, suggest fix approach
+- Output format specification (what `investigation.md` should contain)
+
+**Fix prompt:**
+- The full `error.md` and `investigation.md` content
+- Repo path
+- Instructions: create branch (`fix/<issue-id>-<desc>`), implement the fix, push, create draft MR via `glab`
+- MR conventions: title as `fix(<service>): <description>`, draft, assigned to configured user
+- Output format specification (what `fix.md` should contain)
+- Prerequisites note: agent environment must have `git` and `glab` (authenticated) available
 
 ### Swappable Agents
 
-The agent commands in `config.yml` can be any executable:
+The agent commands in `config.yml` can be any executable that accepts a prompt file path as an argument and writes its report to stdout:
 
 ```yaml
 agent:
   investigate: "claude -p"        # Claude Code (default)
-  fix: "aider --message"          # Aider
-  # fix: "python my_agent.py"     # Custom agent
+  fix: "claude -p"                # Claude Code (default)
+  # investigate: "aider --message-file"  # Aider
+  # fix: "python my_agent.py"            # Custom agent
 ```
 
-Fido does not depend on any specific agent. It provides structured input (markdown prompt) and expects structured output (markdown report).
+Agents that don't follow the `<cmd> <file> --cwd <dir>` convention can be wrapped in a shell script.
 
 ## GitLab MR Creation
 
@@ -206,11 +236,24 @@ The agent uses `glab` (GitLab CLI) to create the MR. Swapping to GitHub later me
 - **Issue Detail** — renders the markdown reports for an issue. Buttons to advance to the next stage ("Investigate this", "Fix this").
 - **Settings** — edit `config.yml` (services, repos, scan interval).
 
-### How It Works
+### HTTP API
 
-- The Go binary exposes an HTTP API via `fido serve`
-- The web UI is a TypeScript frontend that calls this API
-- Actions like "Investigate" trigger `fido investigate <id>` via the API and stream progress back
+The Go binary exposes a REST API via `fido serve`:
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/reports` | List all issues with stage status. Supports `?service=` and `?status=` filters |
+| `GET` | `/api/reports/:id` | Get all reports for an issue |
+| `POST` | `/api/reports/:id/investigate` | Trigger `fido investigate` for an issue |
+| `POST` | `/api/reports/:id/fix` | Trigger `fido fix` for an issue |
+| `GET` | `/api/reports/:id/progress` | SSE stream of agent output for a running action |
+| `GET` | `/api/config` | Get current configuration |
+| `PUT` | `/api/config` | Update configuration |
+| `POST` | `/api/scan` | Trigger an immediate scan |
+
+Long-running actions (`investigate`, `fix`, `scan`) return immediately with a `202 Accepted` and a job ID. The client subscribes to `/api/reports/:id/progress` (Server-Sent Events) to stream agent output in real time.
+
+Error responses use standard HTTP status codes with a JSON body: `{ "error": "<message>" }`.
 
 ## Datadog Integration
 
