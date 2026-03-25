@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ruter-as/fido/internal/reports"
 )
@@ -76,5 +77,57 @@ func TestGetIssueHandler_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestTriggerScanHandler(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	scanCalled := false
+	h := NewHandlers(mgr, nil)
+	h.SetScanFunc(func() error {
+		scanCalled = true
+		return nil
+	})
+
+	req := httptest.NewRequest("POST", "/api/scan", nil)
+	w := httptest.NewRecorder()
+
+	h.TriggerScan(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d", w.Code)
+	}
+	// Give goroutine time to run
+	time.Sleep(50 * time.Millisecond)
+	if !scanCalled {
+		t.Error("expected scan function to be called")
+	}
+}
+
+func TestTriggerInvestigateHandler(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "# Error\ntest")
+
+	investigateCalled := ""
+	h := NewHandlers(mgr, nil)
+	h.SetInvestigateFunc(func(issueID string) error {
+		investigateCalled = issueID
+		return nil
+	})
+
+	req := httptest.NewRequest("POST", "/api/issues/issue-1/investigate", nil)
+	w := httptest.NewRecorder()
+
+	h.TriggerInvestigate(w, withURLParam(req, "id", "issue-1"))
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("expected 202, got %d", w.Code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if investigateCalled != "issue-1" {
+		t.Errorf("expected investigate for issue-1, got %q", investigateCalled)
 	}
 }
