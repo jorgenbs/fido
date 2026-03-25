@@ -1,0 +1,25 @@
+# Fido configuration
+# Copy to ~/.fido/config.yml and fill in your values.
+
+datadog:
+  api_key: ""       # Datadog API key (https://app.datadoghq.eu/organization-settings/api-keys)
+  app_key: ""       # Datadog Application key (https://app.datadoghq.eu/organization-settings/application-keys)
+  site: "datadoghq.eu"
+  services:         # Datadog service names to monitor
+    - "my-service"
+
+scan:
+  interval: "15m"   # How often the daemon polls Datadog
+  since: "24h"      # How far back to look for errors
+
+# Map Datadog service names to code repositories.
+# Use "local" for a filesystem path, or "git" for a clone URL.
+repositories:
+  my-service:
+    local: "/path/to/my-service"
+  # another-service:
+  #   git: "https://gitlab.com/org/another-service.git"
+
+agent:
+  investigate: "claude -p"  # Command prefix for investigation agent
+  fix: "claude -p"          # Command prefix for fix agent
