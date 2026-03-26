@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -17,15 +19,18 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 	cmd.Dir = repoDir
 	cmd.Stdin = strings.NewReader(promptContent)
 
-	output, err := cmd.Output()
-	if err != nil {
+	var buf bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("agent failed (exit %d): %s", exitErr.ExitCode(), string(exitErr.Stderr))
+			return "", fmt.Errorf("agent failed (exit %d)", exitErr.ExitCode())
 		}
 		return "", fmt.Errorf("running agent: %w", err)
 	}
 
-	return string(output), nil
+	return buf.String(), nil
 }
 
 func (r *Runner) RunInteractive(promptContent, repoDir string) error {
