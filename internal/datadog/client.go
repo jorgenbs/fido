@@ -260,8 +260,10 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 
 		if ctx.StackTrace == "" {
 			if custom := attrs.GetCustom(); custom != nil {
-				if stack, ok := custom["error.stack"].(string); ok {
-					ctx.StackTrace = stack
+				if errMap, ok := custom["error"].(map[string]interface{}); ok {
+					if stack, ok := errMap["stack"].(string); ok && stack != "" {
+						ctx.StackTrace = stack
+					}
 				}
 			}
 		}
