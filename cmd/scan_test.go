@@ -166,3 +166,33 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 		t.Errorf("expected 0 new issues (existing skipped), got %d", count)
 	}
 }
+
+func TestRunScan_CIRefresh_SkipsWhenNoResolve(t *testing.T) {
+	// An issue with no resolve.json should not cause any CI-related errors.
+	server := newTestScanServer(t)
+	defer server.Close()
+
+	reportsDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+	// Pre-create issue so scan skips it (already exists)
+	mgr.WriteError("issue-1", "existing")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
+	// No resolve.json → CI refresh should be a no-op
+
+	ddClient := newTestDDClient(t, server.URL)
+	cfg := &config.Config{
+		Datadog: config.DatadogConfig{Services: []string{"svc-a"}},
+		Scan:    config.ScanConfig{Since: "24h"},
+	}
+
+	_, err := runScan(cfg, ddClient, mgr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// meta.json should still have empty CIStatus
+	meta, _ := mgr.ReadMetadata("issue-1")
+	if meta.CIStatus != "" {
+		t.Errorf("expected empty CIStatus, got %q", meta.CIStatus)
+	}
+}
