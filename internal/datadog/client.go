@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -189,18 +190,28 @@ type TraceRef struct {
 // FetchIssueContext builds deep-link URLs and attempts to fetch sample traces
 // for the given service/env within the time window defined by firstSeen/lastSeen.
 func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (IssueContext, error) {
-	from, _ := time.Parse(time.RFC3339, firstSeen)
-	to, _ := time.Parse(time.RFC3339, lastSeen)
+	from, err := time.Parse(time.RFC3339, firstSeen)
+	if err != nil || from.IsZero() {
+		from = time.Now().UTC().Add(-24 * time.Hour)
+	}
+	to, err2 := time.Parse(time.RFC3339, lastSeen)
+	if err2 != nil || to.IsZero() {
+		to = time.Now().UTC()
+	}
 	from = from.Add(-5 * time.Minute)
 	to = to.Add(5 * time.Minute)
 
 	eventsURL := fmt.Sprintf(
-		"https://%s.%s/event/explorer?query=service:%s env:%s&from=%d&to=%d",
-		c.orgSubdomain, c.site, service, env, from.UnixMilli(), to.UnixMilli(),
+		"https://%s.%s/event/explorer?query=%s&from=%d&to=%d",
+		c.orgSubdomain, c.site,
+		url.QueryEscape(fmt.Sprintf("service:%s env:%s", service, env)),
+		from.UnixMilli(), to.UnixMilli(),
 	)
 	tracesURL := fmt.Sprintf(
-		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
-		c.orgSubdomain, c.site, service, env, from.UnixMilli(), to.UnixMilli(),
+		"https://%s.%s/apm/traces?query=%s&start=%d&end=%d",
+		c.orgSubdomain, c.site,
+		url.QueryEscape(fmt.Sprintf("service:%s env:%s", service, env)),
+		from.UnixMilli(), to.UnixMilli(),
 	)
 
 	ctx := IssueContext{
@@ -243,7 +254,7 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		if traceID == "" {
 			continue
 		}
-		traceURL := fmt.Sprintf("https://%s.%s/apm/trace/%s", c.orgSubdomain, c.site, traceID)
+		traceURL := fmt.Sprintf("https://%s.%s/apm/trace/%s", c.orgSubdomain, c.site, url.PathEscape(traceID))
 		ctx.Traces = append(ctx.Traces, TraceRef{TraceID: traceID, URL: traceURL})
 	}
 
