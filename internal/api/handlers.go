@@ -25,6 +25,8 @@ type IssueListItem struct {
 	Count    int64   `json:"count,omitempty"`
 	MRURL    *string `json:"mr_url"`
 	Ignored  bool    `json:"ignored"`
+	CIStatus string  `json:"ci_status,omitempty"`
+	CIURL    string  `json:"ci_url,omitempty"`
 }
 
 type IssueDetail struct {
@@ -34,11 +36,13 @@ type IssueDetail struct {
 	Investigation *string              `json:"investigation"`
 	Fix           *string              `json:"fix"`
 	Resolve       *reports.ResolveData `json:"resolve"`
+	CIStatus      string               `json:"ci_status,omitempty"`
+	CIURL         string               `json:"ci_url,omitempty"`
 }
 
 type ScanFunc func() error
 type InvestigateFunc func(issueID string, progress io.Writer) error
-type FixFunc func(issueID string, progress io.Writer) error
+type FixFunc func(issueID string, iterate bool, progress io.Writer) error
 
 // progressBuf is a thread-safe write buffer for streaming agent output to SSE clients.
 type progressBuf struct {
@@ -101,6 +105,8 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 			item.LastSeen = issue.Meta.LastSeen
 			item.Count    = issue.Meta.Count
 			item.Ignored  = issue.Meta.Ignored
+			item.CIStatus = issue.Meta.CIStatus
+			item.CIURL    = issue.Meta.CIURL
 		}
 		if issue.MRURL != "" {
 			item.MRURL = &issue.MRURL
@@ -129,11 +135,15 @@ func (h *Handlers) GetIssue(w http.ResponseWriter, r *http.Request) {
 	if inv, err := h.reports.ReadInvestigation(id); err == nil {
 		detail.Investigation = &inv
 	}
-	if fix, err := h.reports.ReadFix(id); err == nil {
+	if fix, _, err := h.reports.ReadLatestFix(id); err == nil {
 		detail.Fix = &fix
 	}
 	if resolve, err := h.reports.ReadResolve(id); err == nil {
 		detail.Resolve = resolve
+	}
+	if meta, err := h.reports.ReadMetadata(id); err == nil {
+		detail.CIStatus = meta.CIStatus
+		detail.CIURL = meta.CIURL
 	}
 
 	writeJSON(w, http.StatusOK, detail)
@@ -190,11 +200,17 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "fix not configured")
 		return
 	}
+
+	var req struct {
+		Iterate bool `json:"iterate"`
+	}
+	json.NewDecoder(r.Body).Decode(&req) // ignore parse error; defaults to iterate=false
+
 	pbuf := &progressBuf{}
 	h.progressBufs.Store(id, pbuf)
 	go func() {
 		defer h.running.Delete(id)
-		if err := h.fixFn(id, pbuf); err != nil {
+		if err := h.fixFn(id, req.Iterate, pbuf); err != nil {
 			log.Printf("fix %s failed: %v", id, err)
 			h.running.Store(id+"_error", err.Error())
 		}

@@ -8,6 +8,7 @@ import {
   type IssueDetail as IssueDetailType,
 } from '../api/client';
 import { StageIndicator } from '../components/StageIndicator';
+import { CIStatusBadge } from '../components/CIStatusBadge';
 import { MarkdownViewer } from '../components/MarkdownViewer';
 import { Button } from '../components/ui/button';
 import { toggleTheme } from '../lib/theme';
@@ -85,6 +86,22 @@ export function IssueDetail() {
     setFixState('running');
     try {
       await triggerFix(id);
+      startSSE(() => {
+        setFixState('idle');
+        fetchIssue();
+      });
+    } catch (err) {
+      setFixState('error');
+      setErrorMsg(String(err));
+    }
+  };
+
+  const handleRefix = async () => {
+    if (!id) return;
+    setErrorMsg(null);
+    setFixState('running');
+    try {
+      await triggerFix(id, true);
       startSSE(() => {
         setFixState('idle');
         fetchIssue();
@@ -191,7 +208,7 @@ export function IssueDetail() {
         {/* Resolution */}
         {issue.resolve && (
           <Section title="Resolution">
-            <div className="p-4 space-y-1 text-sm">
+            <div className="p-4 space-y-2 text-sm">
               <p><span className="text-muted-foreground">Branch:</span> <code className="text-xs">{issue.resolve.branch}</code></p>
               <p>
                 <span className="text-muted-foreground">MR:</span>{' '}
@@ -199,8 +216,26 @@ export function IssueDetail() {
                   {issue.resolve.mr_url}
                 </a>
               </p>
-              <p><span className="text-muted-foreground">Status:</span> {issue.resolve.mr_status}</p>
+              <p><span className="text-muted-foreground">MR Status:</span> {issue.resolve.mr_status}</p>
+              {issue.ci_status && (
+                <p className="flex items-center gap-2">
+                  <span className="text-muted-foreground">CI:</span>
+                  <CIStatusBadge status={issue.ci_status} url={issue.ci_url || undefined} />
+                </p>
+              )}
               <p><span className="text-muted-foreground">Created:</span> {new Date(issue.resolve.created_at).toLocaleString()}</p>
+              {issue.ci_status === 'failed' && fixState !== 'running' && (
+                <div className="pt-2">
+                  <Button size="sm" variant="outline" onClick={handleRefix} className="border-red-800 text-red-400 hover:bg-red-950/30">
+                    Re-fix (CI failing)
+                  </Button>
+                </div>
+              )}
+              {fixState === 'running' && progressLog && (
+                <pre className="mt-2 p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
+                  {progressLog}
+                </pre>
+              )}
             </div>
           </Section>
         )}

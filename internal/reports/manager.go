@@ -38,6 +38,8 @@ type MetaData struct {
 	DatadogEventsURL string `json:"datadog_events_url"`
 	DatadogTraceURL  string `json:"datadog_trace_url"`
 	Ignored          bool   `json:"ignored"`
+	CIStatus         string `json:"ci_status,omitempty"`
+	CIURL            string `json:"ci_url,omitempty"`
 }
 
 type IssueSummary struct {
@@ -102,6 +104,26 @@ func (m *Manager) WriteFix(issueID, content string) error {
 
 func (m *Manager) ReadFix(issueID string) (string, error) {
 	return m.readFile(issueID, "fix.md")
+}
+
+// ReadLatestFix returns the content and iteration number of the most recent fix file.
+// Iteration 1 = fix.md, iteration 2 = fix-2.md, etc.
+// Returns an error if no fix file exists.
+func (m *Manager) ReadLatestFix(issueID string) (string, int, error) {
+	// Walk down from high iterations to find the latest
+	for n := 10; n >= 2; n-- {
+		filename := fmt.Sprintf("fix-%d.md", n)
+		if m.fileExists(issueID, filename) {
+			content, err := m.readFile(issueID, filename)
+			return content, n, err
+		}
+	}
+	// Fall back to fix.md (iteration 1)
+	content, err := m.readFile(issueID, "fix.md")
+	if err != nil {
+		return "", 0, fmt.Errorf("no fix file found for %s", issueID)
+	}
+	return content, 1, nil
 }
 
 func (m *Manager) WriteResolve(issueID string, data *ResolveData) error {

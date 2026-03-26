@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/datadog"
+	"github.com/ruter-as/fido/internal/gitlab"
 	"github.com/ruter-as/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
@@ -43,8 +45,9 @@ var scanCmd = &cobra.Command{
 		}
 
 		scanCfg := &config.Config{
-			Datadog: config.DatadogConfig{Services: services, Site: cfg.Datadog.Site, OrgSubdomain: cfg.Datadog.OrgSubdomain},
-			Scan:    config.ScanConfig{Since: since},
+			Datadog:      config.DatadogConfig{Services: services, Site: cfg.Datadog.Site, OrgSubdomain: cfg.Datadog.OrgSubdomain},
+			Scan:         config.ScanConfig{Since: since},
+			Repositories: cfg.Repositories,
 		}
 
 		count, err := runScan(scanCfg, ddClient, mgr)
@@ -149,6 +152,8 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 		count++
 	}
 
+	refreshCIStatuses(cfg, mgr)
+
 	return count, nil
 }
 
@@ -232,6 +237,42 @@ func buildTracesURL(org, site, service, env, firstSeen, lastSeen string) string 
 		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
 		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
 	)
+}
+
+// refreshCIStatuses updates ci_status and ci_url in meta.json for all issues
+// that have a resolve.json (i.e. a branch and MR). Non-fatal: logs and skips on error.
+func refreshCIStatuses(cfg *config.Config, mgr *reports.Manager) {
+	issues, err := mgr.ListIssues(true) // include ignored
+	if err != nil {
+		log.Printf("CI refresh: listing issues: %v", err)
+		return
+	}
+	for _, issue := range issues {
+		resolve, err := mgr.ReadResolve(issue.ID)
+		if err != nil || resolve.Branch == "" {
+			continue
+		}
+		repoPath, err := resolveRepoPath(resolve.Service, cfg)
+		if err != nil {
+			log.Printf("CI refresh: no repo for service %q (issue %s): %v", resolve.Service, issue.ID, err)
+			continue
+		}
+		status, ciURL, err := gitlab.FetchCIStatus(resolve.Branch, repoPath)
+		if err != nil {
+			log.Printf("CI refresh: glab failed for %s: %v", issue.ID, err)
+			continue
+		}
+		meta, err := mgr.ReadMetadata(issue.ID)
+		if err != nil {
+			log.Printf("CI refresh: reading meta for %s: %v", issue.ID, err)
+			continue
+		}
+		meta.CIStatus = status
+		meta.CIURL = ciURL
+		if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
+			log.Printf("CI refresh: writing meta for %s: %v", issue.ID, err)
+		}
+	}
 }
 
 func init() {

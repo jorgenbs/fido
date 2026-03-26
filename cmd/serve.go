@@ -53,7 +53,7 @@ var serveCmd = &cobra.Command{
 			}
 			return runInvestigate(issueID, service, cfg, mgr, progress)
 		})
-		handlers.SetFixFunc(func(issueID string, progress io.Writer) error {
+		handlers.SetFixFunc(func(issueID string, iterate bool, progress io.Writer) error {
 			service := ""
 			if meta, err := mgr.ReadMetadata(issueID); err == nil {
 				service = meta.Service
@@ -61,6 +61,9 @@ var serveCmd = &cobra.Command{
 			if service == "" {
 				errorContent, _ := mgr.ReadError(issueID)
 				service = extractServiceFromReport(errorContent)
+			}
+			if iterate {
+				return runFixIterate(issueID, service, cfg, mgr, progress)
 			}
 			return runFix(issueID, service, cfg, mgr, progress)
 		})
