@@ -193,10 +193,16 @@ type TraceRef struct {
 func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (IssueContext, error) {
 	from, err := time.Parse(time.RFC3339, firstSeen)
 	if err != nil || from.IsZero() {
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: firstSeen parse error (%v), defaulting to 24h ago\n", err)
+		}
 		from = time.Now().UTC().Add(-24 * time.Hour)
 	}
 	to, err2 := time.Parse(time.RFC3339, lastSeen)
 	if err2 != nil || to.IsZero() {
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: lastSeen parse error (%v), defaulting to now\n", err2)
+		}
 		to = time.Now().UTC()
 	}
 	from = from.Add(-5 * time.Minute)
@@ -225,6 +231,11 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		query += " env:" + env
 	}
 
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: spans query=%q from=%s to=%s\n",
+			query, from.Format(time.RFC3339), to.Format(time.RFC3339))
+	}
+
 	body := datadogV2.SpansListRequest{
 		Data: &datadogV2.SpansListRequestData{
 			Attributes: &datadogV2.SpansListRequestAttributes{
@@ -244,14 +255,22 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 	resp, _, err := c.spansAPI.ListSpans(c.ctx(), body)
 	if err != nil {
 		if c.verbose {
-			fmt.Fprintf(os.Stderr, "FetchIssueContext: spans lookup failed (non-fatal): %v\n", err)
+			fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: spans lookup failed (non-fatal): %v\n", err)
 		}
 		return ctx, nil
 	}
 
-	for _, span := range resp.GetData() {
+	spans := resp.GetData()
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: got %d spans\n", len(spans))
+	}
+
+	for i, span := range spans {
 		attrs := span.GetAttributes()
 		traceID := attrs.GetTraceId()
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, "[datadog] span[%d]: traceID=%q\n", i, traceID)
+		}
 		if traceID == "" {
 			continue
 		}
@@ -259,9 +278,23 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		ctx.Traces = append(ctx.Traces, TraceRef{TraceID: traceID, URL: traceURL})
 
 		if ctx.StackTrace == "" {
-			if custom := attrs.GetCustom(); custom != nil {
-				if errMap, ok := custom["error"].(map[string]interface{}); ok {
-					if stack, ok := errMap["stack"].(string); ok && stack != "" {
+			custom := attrs.GetCustom()
+			if c.verbose {
+				fmt.Fprintf(os.Stderr, "[datadog] span[%d]: custom keys=%v\n", i, mapKeys(custom))
+			}
+			if custom != nil {
+				errVal, hasError := custom["error"]
+				if c.verbose {
+					fmt.Fprintf(os.Stderr, "[datadog] span[%d]: custom[\"error\"] present=%v type=%T value=%v\n",
+						i, hasError, errVal, errVal)
+				}
+				if errMap, ok := errVal.(map[string]interface{}); ok {
+					stackVal := errMap["stack"]
+					if c.verbose {
+						fmt.Fprintf(os.Stderr, "[datadog] span[%d]: error[\"stack\"] type=%T value=%v\n",
+							i, stackVal, stackVal)
+					}
+					if stack, ok := stackVal.(string); ok && stack != "" {
 						ctx.StackTrace = stack
 					}
 				}
@@ -269,7 +302,23 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		}
 	}
 
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] FetchIssueContext: stackTrace found=%v traces=%d\n",
+			ctx.StackTrace != "", len(ctx.Traces))
+	}
+
 	return ctx, nil
+}
+
+func mapKeys(m map[string]interface{}) []string {
+	if m == nil {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // OverrideServers replaces the SDK server configuration (used for testing with httptest).
