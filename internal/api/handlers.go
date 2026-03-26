@@ -14,8 +14,14 @@ import (
 )
 
 type IssueListItem struct {
-	ID    string `json:"id"`
-	Stage string `json:"stage"`
+	ID       string  `json:"id"`
+	Stage    string  `json:"stage"`
+	Title    string  `json:"title,omitempty"`
+	Service  string  `json:"service,omitempty"`
+	LastSeen string  `json:"last_seen,omitempty"`
+	Count    int64   `json:"count,omitempty"`
+	MRURL    *string `json:"mr_url"`
+	Ignored  bool    `json:"ignored"`
 }
 
 type IssueDetail struct {
@@ -49,7 +55,8 @@ func (h *Handlers) SetInvestigateFunc(fn InvestigateFunc) { h.investigateFn = fn
 func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
 
 func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
-	issues, err := h.reports.ListIssues(false)
+	showIgnored := r.URL.Query().Get("show_ignored") == "true"
+	issues, err := h.reports.ListIssues(showIgnored)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -62,10 +69,21 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 		if statusFilter != "" && string(issue.Stage) != statusFilter {
 			continue
 		}
-		items = append(items, IssueListItem{
+		item := IssueListItem{
 			ID:    issue.ID,
 			Stage: string(issue.Stage),
-		})
+		}
+		if issue.Meta != nil {
+			item.Title    = issue.Meta.Title
+			item.Service  = issue.Meta.Service
+			item.LastSeen = issue.Meta.LastSeen
+			item.Count    = issue.Meta.Count
+			item.Ignored  = issue.Meta.Ignored
+		}
+		if issue.MRURL != "" {
+			item.MRURL = &issue.MRURL
+		}
+		items = append(items, item)
 	}
 
 	writeJSON(w, http.StatusOK, items)
