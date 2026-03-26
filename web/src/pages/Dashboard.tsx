@@ -48,7 +48,7 @@ export function Dashboard() {
       } else {
         await ignoreIssue(id);
       }
-      fetchIssues();
+      await fetchIssues();
     } catch (err) {
       console.error('Failed to toggle ignore:', err);
     }
