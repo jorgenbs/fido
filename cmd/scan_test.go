@@ -25,8 +25,15 @@ func newTestDDClient(t *testing.T, serverURL string) *ddclient.Client {
 	return c
 }
 
-func TestScanCommand_CreatesErrorReports(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func newTestScanServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "spans") {
+			// Spans API: return empty result (FetchIssueContext is non-fatal)
+			json.NewEncoder(w).Encode(map[string]interface{}{"data": []interface{}{}})
+			return
+		}
+		// Error issues search API
 		resp := map[string]interface{}{
 			"data": []map[string]interface{}{
 				{
@@ -46,12 +53,18 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 						"error_message": "null in handler",
 						"service":       "svc-a",
 						"state":         "OPEN",
+						"first_seen":    int64(1711324800000),
+						"last_seen":     int64(1711411200000),
 					},
 				},
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
 	}))
+}
+
+func TestScanCommand_CreatesErrorReports(t *testing.T) {
+	server := newTestScanServer(t)
 	defer server.Close()
 
 	reportsDir := t.TempDir()
@@ -81,6 +94,9 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 	content, _ := mgr.ReadError("issue-1")
 	if !strings.Contains(content, "NullPointerException") {
 		t.Error("expected error report to contain error title")
+	}
+	if !strings.Contains(content, "myorg") {
+		t.Error("expected error report to contain Datadog links with org subdomain")
 	}
 
 	meta, err := mgr.ReadMetadata("issue-1")

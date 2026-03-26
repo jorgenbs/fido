@@ -11,7 +11,6 @@ import (
 
 	"github.com/ruter-as/fido/internal/agent"
 	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
@@ -42,8 +41,7 @@ var investigateCmd = &cobra.Command{
 				return fmt.Errorf("could not determine service — use --service flag")
 			}
 		}
-		ddClient, _ := datadog.NewClient(cfg.Datadog.Token, cfg.Datadog.Site, cfg.Datadog.OrgSubdomain)
-		return runInvestigate(issueID, service, cfg, mgr, ddClient, nil)
+		return runInvestigate(issueID, service, cfg, mgr, nil)
 	},
 }
 
@@ -73,7 +71,7 @@ Write your analysis as markdown with these sections:
 - **Complexity**: Simple/Moderate/Complex
 `
 
-func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client, progress io.Writer) error {
+func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, progress io.Writer) error {
 	log.Printf("[investigate] %s: reading error report", issueID)
 	errorContent, err := mgr.ReadError(issueID)
 	if err != nil {
@@ -86,52 +84,7 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		return err
 	}
 
-	// Build context section from meta.json + optional Datadog traces
-	log.Printf("[investigate] %s: fetching Datadog context", issueID)
-	var contextSection string
-	if meta, err := mgr.ReadMetadata(issueID); err == nil {
-		var issueCtx datadog.IssueContext
-		if ddClient != nil {
-			issueCtx, _ = ddClient.FetchIssueContext(meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen)
-			// Fall back to pre-computed links from meta.json if the live fetch returned nothing.
-			if issueCtx.EventsURL == "" {
-				issueCtx.EventsURL = meta.DatadogEventsURL
-			}
-			if issueCtx.TracesURL == "" {
-				issueCtx.TracesURL = meta.DatadogTraceURL
-			}
-		} else {
-			// Use pre-computed deep links from meta.json
-			issueCtx = datadog.IssueContext{
-				EventsURL: meta.DatadogEventsURL,
-				TracesURL: meta.DatadogTraceURL,
-			}
-		}
-		log.Printf("[investigate] %s: context: traces=%d eventsURL=%v tracesURL=%v",
-			issueID, len(issueCtx.Traces), issueCtx.EventsURL != "", issueCtx.TracesURL != "")
-
-		var lines []string
-		if len(issueCtx.Traces) > 0 {
-			lines = append(lines, "\n## Related Traces\n")
-			for _, tr := range issueCtx.Traces {
-				lines = append(lines, fmt.Sprintf("- [Trace %s](%s)", tr.TraceID, tr.URL))
-			}
-		}
-		var linkLines []string
-		if issueCtx.EventsURL != "" {
-			linkLines = append(linkLines, fmt.Sprintf("- [Events Timeline](%s)", issueCtx.EventsURL))
-		}
-		if issueCtx.TracesURL != "" {
-			linkLines = append(linkLines, fmt.Sprintf("- [Trace Waterfall](%s)", issueCtx.TracesURL))
-		}
-		if len(linkLines) > 0 {
-			lines = append(lines, "\n## Useful Links\n")
-			lines = append(lines, linkLines...)
-		}
-		contextSection = strings.Join(lines, "\n")
-	}
-
-	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent) + contextSection
+	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent)
 
 	log.Printf("[investigate] %s: starting agent %q (repo=%s, error=%d bytes, prompt=%d bytes total)", issueID, cfg.Agent.Investigate, repoPath, len(errorContent), len(prompt))
 	runner := &agent.Runner{Command: cfg.Agent.Investigate, Progress: progress}

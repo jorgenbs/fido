@@ -24,7 +24,7 @@ func TestInvestigate_ProducesInvestigationReport(t *testing.T) {
 		},
 	}
 
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestInvestigate_FailsWithoutErrorReport(t *testing.T) {
 	mgr := reports.NewManager(reportsDir)
 
 	cfg := &config.Config{}
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
 	if err == nil {
 		t.Error("expected error when no error.md exists")
 	}
@@ -54,24 +54,15 @@ func TestRunInvestigate_IncludesContextLinks(t *testing.T) {
 	repoDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
 
-	mgr.WriteError("issue-1", "# Error\nNullPointerException")
-	if err := mgr.WriteMetadata("issue-1", &reports.MetaData{
-		Service:          "svc-a",
-		Env:              "production",
-		FirstSeen:        "2026-03-25T10:00:00Z",
-		LastSeen:         "2026-03-26T09:00:00Z",
-		DatadogEventsURL: "https://example.com/events",
-		DatadogTraceURL:  "https://example.com/traces",
-	}); err != nil {
-		t.Fatal(err)
-	}
+	// URLs are now embedded in error.md by the scan step
+	mgr.WriteError("issue-1", "# Error\nNullPointerException\n\n## Links\n\n- [Events Timeline](https://example.com/events)\n- [Trace Waterfall](https://example.com/traces)\n")
 
 	cfg := &config.Config{
 		Repositories: map[string]config.RepoConfig{"svc-a": {Local: repoDir}},
 		Agent:        config.AgentConfig{Investigate: "cat"},
 	}
 
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

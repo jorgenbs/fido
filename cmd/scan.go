@@ -69,6 +69,9 @@ type errorReportData struct {
 	StackTrace string
 	Logs       []datadog.LogAttributes
 	DatadogURL string
+	Traces     []datadog.TraceRef
+	EventsURL  string
+	TracesURL  string
 }
 
 func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) (int, error) {
@@ -88,6 +91,9 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			continue
 		}
 
+		eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+
 		data := errorReportData{
 			ID:         issue.ID,
 			Title:      issue.Attributes.Title,
@@ -100,6 +106,18 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			Status:     issue.Attributes.Status,
 			StackTrace: issue.Attributes.StackTrace,
 			DatadogURL: fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID),
+			EventsURL:  eventsURL,
+			TracesURL:  tracesURL,
+		}
+
+		if issueCtx, err := ddClient.FetchIssueContext(issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen); err == nil {
+			data.Traces = issueCtx.Traces
+			if issueCtx.EventsURL != "" {
+				data.EventsURL = issueCtx.EventsURL
+			}
+			if issueCtx.TracesURL != "" {
+				data.TracesURL = issueCtx.TracesURL
+			}
 		}
 
 		var buf bytes.Buffer
@@ -119,8 +137,8 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			LastSeen:         issue.Attributes.LastSeen,
 			Count:            issue.Attributes.Count,
 			DatadogURL:       data.DatadogURL,
-			DatadogEventsURL: buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen),
-			DatadogTraceURL:  buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen),
+			DatadogEventsURL: eventsURL,
+			DatadogTraceURL:  tracesURL,
 		}
 		if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
 			return count, fmt.Errorf("writing metadata: %w", err)
@@ -168,11 +186,18 @@ _No stack trace available_
 {{else}}
 _No surrounding logs found_
 {{end}}
+{{if .Traces}}
+## Related Traces
 
+{{range .Traces}}- [Trace {{.TraceID}}]({{.URL}})
+{{end}}
+{{end}}
 ## Links
 
 - [Datadog Issue]({{.DatadogURL}})
-`
+{{if .EventsURL}}- [Events Timeline]({{.EventsURL}})
+{{end}}{{if .TracesURL}}- [Trace Waterfall]({{.TracesURL}})
+{{end}}`
 	return template.New("error").Parse(defaultTemplate)
 }
 
