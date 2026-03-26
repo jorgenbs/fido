@@ -50,7 +50,7 @@ var serveCmd = &cobra.Command{
 				errorContent, _ := mgr.ReadError(issueID)
 				service = extractServiceFromReport(errorContent)
 			}
-			return runInvestigate(issueID, service, cfg, mgr)
+			return runInvestigate(issueID, service, cfg, mgr, ddClient)
 		})
 		handlers.SetFixFunc(func(issueID string) error {
 			service := ""
