@@ -64,7 +64,7 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 
 	statusFilter := r.URL.Query().Get("status")
 
-	var items []IssueListItem
+	items := []IssueListItem{}
 	for _, issue := range issues {
 		if statusFilter != "" && string(issue.Stage) != statusFilter {
 			continue
