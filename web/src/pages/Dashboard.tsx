@@ -15,7 +15,7 @@ import { toggleTheme } from '../lib/theme';
 
 export function Dashboard() {
   const [issues, setIssues] = useState<IssueListItem[]>([]);
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState('all');
   const [showIgnored, setShowIgnored] = useState(false);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -23,7 +23,7 @@ export function Dashboard() {
   const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await listIssues(filter || undefined, showIgnored);
+      const data = await listIssues(filter === 'all' ? undefined : filter, showIgnored);
       setIssues(data);
     } catch (err) {
       console.error('Failed to fetch issues:', err);
@@ -85,7 +85,7 @@ export function Dashboard() {
               <SelectValue placeholder="All stages" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All stages</SelectItem>
+              <SelectItem value="all">All stages</SelectItem>
               <SelectItem value="scanned">Scanned</SelectItem>
               <SelectItem value="investigated">Investigated</SelectItem>
               <SelectItem value="fixed">Fixed</SelectItem>
