@@ -53,7 +53,7 @@ const investigatePromptTemplate = `You are investigating a production error. Ana
 
 ## Instructions
 
-0. Ensure you are on the latest main/master branch
+0. Ensure you are on the latest on main branch
 1. Analyze the error and stack trace
 2. Find the relevant code in the repository
 3. Identify the root cause

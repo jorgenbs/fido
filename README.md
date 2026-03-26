@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/fido-banner.png" alt="Fido — go fetch fido" width="640" />
+  <img src="docs/fido-banner.png" alt="Fido — go fetch fido" />
 </p>
 
 # Fido
