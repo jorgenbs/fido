@@ -13,7 +13,7 @@ import (
 // newTestClient creates a Client pointing at the given httptest server.
 func newTestClient(t *testing.T, serverURL string) *Client {
 	t.Helper()
-	c, err := NewClient("test-token", "test.datadoghq.com")
+	c, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -108,8 +108,29 @@ func TestClient_SearchErrorIssues(t *testing.T) {
 	}
 }
 
+func TestClient_FetchIssueContext_ReturnsDeepLinks(t *testing.T) {
+	c, err := NewClient("token", "datadoghq.eu", "myorg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.OverrideServers(datadog.ServerConfigurations{
+		{URL: "http://localhost:0"},
+	})
+
+	ctx, err := c.FetchIssueContext("payment-svc", "production", "2026-03-25T10:00:00Z", "2026-03-26T09:00:00Z")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ctx.EventsURL == "" {
+		t.Error("expected EventsURL to be non-empty")
+	}
+	if ctx.TracesURL == "" {
+		t.Error("expected TracesURL to be non-empty")
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
-	client, err := NewClient("test-token", "test.datadoghq.com")
+	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -12,11 +13,13 @@ import (
 )
 
 type Client struct {
-	token   string
-	site    string
-	verbose bool
-	api     *datadogV2.ErrorTrackingApi
-	cfg     *datadog.Configuration
+	token        string
+	site         string
+	orgSubdomain string
+	verbose      bool
+	api          *datadogV2.ErrorTrackingApi
+	spansAPI     *datadogV2.SpansApi
+	cfg          *datadog.Configuration
 }
 
 // ErrorIssue is a simplified view of a Datadog error tracking issue.
@@ -49,7 +52,7 @@ type LogAttributes struct {
 	Status    string
 }
 
-func NewClient(token, site string) (*Client, error) {
+func NewClient(token, site, orgSubdomain string) (*Client, error) {
 	if token == "" {
 		return nil, fmt.Errorf("datadog token is required")
 	}
@@ -60,9 +63,10 @@ func NewClient(token, site string) (*Client, error) {
 	cfg := datadog.NewConfiguration()
 
 	c := &Client{
-		token: token,
-		site:  site,
-		cfg:   cfg,
+		token:        token,
+		site:         site,
+		orgSubdomain: orgSubdomain,
+		cfg:          cfg,
 	}
 
 	// Inject a custom transport that adds Bearer auth for PAT
@@ -73,6 +77,7 @@ func NewClient(token, site string) (*Client, error) {
 
 	apiClient := datadog.NewAPIClient(cfg)
 	c.api = datadogV2.NewErrorTrackingApi(apiClient)
+	c.spansAPI = datadogV2.NewSpansApi(apiClient)
 
 	return c, nil
 }
@@ -166,6 +171,83 @@ func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssu
 	}
 
 	return issues, nil
+}
+
+// IssueContext holds deep-link URLs and trace references for a Datadog issue.
+type IssueContext struct {
+	Traces    []TraceRef
+	EventsURL string
+	TracesURL string
+}
+
+// TraceRef is a reference to a single Datadog trace.
+type TraceRef struct {
+	TraceID string
+	URL     string
+}
+
+// FetchIssueContext builds deep-link URLs and attempts to fetch sample traces
+// for the given service/env within the time window defined by firstSeen/lastSeen.
+func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (IssueContext, error) {
+	from, _ := time.Parse(time.RFC3339, firstSeen)
+	to, _ := time.Parse(time.RFC3339, lastSeen)
+	from = from.Add(-5 * time.Minute)
+	to = to.Add(5 * time.Minute)
+
+	eventsURL := fmt.Sprintf(
+		"https://%s.%s/event/explorer?query=service:%s env:%s&from=%d&to=%d",
+		c.orgSubdomain, c.site, service, env, from.UnixMilli(), to.UnixMilli(),
+	)
+	tracesURL := fmt.Sprintf(
+		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
+		c.orgSubdomain, c.site, service, env, from.UnixMilli(), to.UnixMilli(),
+	)
+
+	ctx := IssueContext{
+		EventsURL: eventsURL,
+		TracesURL: tracesURL,
+	}
+
+	query := fmt.Sprintf("service:%s", service)
+	if env != "" {
+		query += " env:" + env
+	}
+
+	body := datadogV2.SpansListRequest{
+		Data: &datadogV2.SpansListRequestData{
+			Attributes: &datadogV2.SpansListRequestAttributes{
+				Filter: &datadogV2.SpansQueryFilter{
+					Query: datadog.PtrString(query),
+					From:  datadog.PtrString(from.Format(time.RFC3339)),
+					To:    datadog.PtrString(to.Format(time.RFC3339)),
+				},
+				Page: &datadogV2.SpansListRequestPage{
+					Limit: datadog.PtrInt32(3),
+				},
+			},
+			Type: datadogV2.SPANSLISTREQUESTTYPE_SEARCH_REQUEST.Ptr(),
+		},
+	}
+
+	resp, _, err := c.spansAPI.ListSpans(c.ctx(), body)
+	if err != nil {
+		if c.verbose {
+			fmt.Fprintf(os.Stderr, "FetchIssueContext: spans lookup failed (non-fatal): %v\n", err)
+		}
+		return ctx, nil
+	}
+
+	for _, span := range resp.GetData() {
+		attrs := span.GetAttributes()
+		traceID := attrs.GetTraceId()
+		if traceID == "" {
+			continue
+		}
+		traceURL := fmt.Sprintf("https://%s.%s/apm/trace/%s", c.orgSubdomain, c.site, traceID)
+		ctx.Traces = append(ctx.Traces, TraceRef{TraceID: traceID, URL: traceURL})
+	}
+
+	return ctx, nil
 }
 
 // OverrideServers replaces the SDK server configuration (used for testing with httptest).

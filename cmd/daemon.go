@@ -34,6 +34,7 @@ var daemonCmd = &cobra.Command{
 		ddClient, err := datadog.NewClient(
 			cfg.Datadog.Token,
 			cfg.Datadog.Site,
+			cfg.Datadog.OrgSubdomain,
 		)
 		if err != nil {
 			return err

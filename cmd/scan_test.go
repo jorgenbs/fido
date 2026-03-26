@@ -15,7 +15,7 @@ import (
 
 func newTestDDClient(t *testing.T, serverURL string) *ddclient.Client {
 	t.Helper()
-	c, err := ddclient.NewClient("token", "test.datadoghq.com")
+	c, err := ddclient.NewClient("token", "test.datadoghq.com", "myorg")
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
