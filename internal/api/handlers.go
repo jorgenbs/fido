@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -143,7 +144,10 @@ func (h *Handlers) TriggerInvestigate(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() {
 		defer h.running.Delete(id)
-		h.investigateFn(id)
+		if err := h.investigateFn(id); err != nil {
+			log.Printf("investigate %s failed: %v", id, err)
+			h.running.Store(id+"_error", err.Error())
+		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -165,7 +169,10 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 	}
 	go func() {
 		defer h.running.Delete(id)
-		h.fixFn(id)
+		if err := h.fixFn(id); err != nil {
+			log.Printf("fix %s failed: %v", id, err)
+			h.running.Store(id+"_error", err.Error())
+		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -209,12 +216,18 @@ func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for {
-		if _, running := h.running.Load(id); !running {
-			fmt.Fprintf(w, "data: {\"status\": \"complete\"}\n\n")
+		if errMsg, hasErr := h.running.Load(id + "_error"); hasErr {
+			h.running.Delete(id + "_error")
+			fmt.Fprintf(w, "data: {\"status\":\"error\",\"message\":%q}\n\n", errMsg)
 			flusher.Flush()
 			return
 		}
-		fmt.Fprintf(w, "data: {\"status\": \"running\"}\n\n")
+		if _, running := h.running.Load(id); !running {
+			fmt.Fprintf(w, "data: {\"status\":\"complete\"}\n\n")
+			flusher.Flush()
+			return
+		}
+		fmt.Fprintf(w, "data: {\"status\":\"running\"}\n\n")
 		flusher.Flush()
 		time.Sleep(2 * time.Second)
 	}

@@ -41,13 +41,25 @@ var serveCmd = &cobra.Command{
 			return nil
 		})
 		handlers.SetInvestigateFunc(func(issueID string) error {
-			errorContent, _ := mgr.ReadError(issueID)
-			service := extractServiceFromReport(errorContent)
+			service := ""
+			if meta, err := mgr.ReadMetadata(issueID); err == nil {
+				service = meta.Service
+			}
+			if service == "" {
+				errorContent, _ := mgr.ReadError(issueID)
+				service = extractServiceFromReport(errorContent)
+			}
 			return runInvestigate(issueID, service, cfg, mgr)
 		})
 		handlers.SetFixFunc(func(issueID string) error {
-			errorContent, _ := mgr.ReadError(issueID)
-			service := extractServiceFromReport(errorContent)
+			service := ""
+			if meta, err := mgr.ReadMetadata(issueID); err == nil {
+				service = meta.Service
+			}
+			if service == "" {
+				errorContent, _ := mgr.ReadError(issueID)
+				service = extractServiceFromReport(errorContent)
+			}
 			return runFix(issueID, service, cfg, mgr)
 		})
 
