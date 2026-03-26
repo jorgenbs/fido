@@ -32,8 +32,7 @@ var daemonCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 		ddClient := datadog.NewClient(
-			cfg.Datadog.APIKey,
-			cfg.Datadog.AppKey,
+			cfg.Datadog.Token,
 			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
 		)
 

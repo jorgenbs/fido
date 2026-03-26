@@ -16,8 +16,7 @@ type Config struct {
 }
 
 type DatadogConfig struct {
-	APIKey   string   `yaml:"api_key"`
-	AppKey   string   `yaml:"app_key"`
+	Token    string   `yaml:"token"`
 	Site     string   `yaml:"site"`
 	Services []string `yaml:"services"`
 }

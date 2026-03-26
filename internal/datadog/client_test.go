@@ -12,8 +12,8 @@ func TestClient_SearchErrorIssues(t *testing.T) {
 		if r.URL.Path != "/api/v2/error-tracking/issues" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		if r.Header.Get("DD-API-KEY") != "test-key" {
-			t.Error("missing API key header")
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Error("missing or incorrect Authorization header")
 		}
 
 		resp := SearchIssuesResponse{
@@ -37,7 +37,7 @@ func TestClient_SearchErrorIssues(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", "test-app-key", server.URL)
+	client := NewClient("test-token", server.URL)
 	issues, err := client.SearchErrorIssues([]string{"svc-a"}, "24h")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -70,7 +70,7 @@ func TestClient_SearchLogs(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", "test-app-key", server.URL)
+	client := NewClient("test-token", server.URL)
 	logs, err := client.SearchLogs("trace_id:abc123", "1h")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

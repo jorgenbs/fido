@@ -14,8 +14,7 @@ TMPDIR=$(mktemp -d)
 mkdir -p "$TMPDIR/reports"
 cat > "$TMPDIR/config.yml" <<EOF
 datadog:
-  api_key: "fake"
-  app_key: "fake"
+  token: "fake"
   site: "datadoghq.eu"
 scan:
   interval: "15m"

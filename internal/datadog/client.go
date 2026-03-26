@@ -11,8 +11,7 @@ import (
 )
 
 type Client struct {
-	apiKey  string
-	appKey  string
+	token   string
 	baseURL string
 	http    *http.Client
 }
@@ -53,10 +52,9 @@ type SearchLogsResponse struct {
 	Data []LogEntry `json:"data"`
 }
 
-func NewClient(apiKey, appKey, baseURL string) *Client {
+func NewClient(token, baseURL string) *Client {
 	return &Client{
-		apiKey:  apiKey,
-		appKey:  appKey,
+		token:   token,
 		baseURL: strings.TrimRight(baseURL, "/"),
 		http:    &http.Client{Timeout: 30 * time.Second},
 	}
@@ -72,8 +70,7 @@ func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("DD-API-KEY", c.apiKey)
-	req.Header.Set("DD-APPLICATION-KEY", c.appKey)
+	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.http.Do(req)

@@ -41,7 +41,7 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 
 	reportsDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
-	ddClient := datadog.NewClient("key", "app", server.URL)
+	ddClient := datadog.NewClient("token", server.URL)
 
 	cfg := &config.Config{
 		Datadog: config.DatadogConfig{
@@ -81,7 +81,7 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 
 	reportsDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
-	ddClient := datadog.NewClient("key", "app", server.URL)
+	ddClient := datadog.NewClient("token", server.URL)
 
 	mgr.WriteError("issue-1", "existing report")
 

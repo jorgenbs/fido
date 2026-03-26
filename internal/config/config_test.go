@@ -13,8 +13,7 @@ func TestLoadConfig(t *testing.T) {
 
 	content := `
 datadog:
-  api_key: "test-api-key"
-  app_key: "test-app-key"
+  token: "test-pat-token"
   site: "datadoghq.eu"
   services:
     - "svc-a"
@@ -41,8 +40,8 @@ agent:
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.Datadog.APIKey != "test-api-key" {
-		t.Errorf("expected api_key 'test-api-key', got %q", cfg.Datadog.APIKey)
+	if cfg.Datadog.Token != "test-pat-token" {
+		t.Errorf("expected token 'test-pat-token', got %q", cfg.Datadog.Token)
 	}
 	if len(cfg.Datadog.Services) != 2 {
 		t.Errorf("expected 2 services, got %d", len(cfg.Datadog.Services))
@@ -71,8 +70,7 @@ func TestLoadConfig_DefaultValues(t *testing.T) {
 
 	content := `
 datadog:
-  api_key: "key"
-  app_key: "app"
+  token: "test-token"
 `
 	os.WriteFile(configPath, []byte(content), 0644)
 

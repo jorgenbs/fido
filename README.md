@@ -23,7 +23,7 @@ Each stage produces a markdown report in `~/.fido/reports/<issue-id>/`. Stages a
 
 - Go 1.22+
 - Node.js 20+ (for web UI)
-- Datadog API key and Application key
+- Datadog Personal Access Token (PAT) with `error_tracking_issue_read` and `logs_read_data` scopes
 - `glab` CLI authenticated (for MR creation via the fix agent)
 - An AI agent CLI (default: `claude`)
 
@@ -36,7 +36,7 @@ go build -o fido .
 # Create config
 mkdir -p ~/.fido
 cp config.example.yml ~/.fido/config.yml
-# Edit ~/.fido/config.yml with your Datadog keys, services, and repo paths
+# Edit ~/.fido/config.yml with your Datadog PAT, services, and repo paths
 ```
 
 ## Configuration
@@ -45,9 +45,8 @@ All configuration lives in `~/.fido/config.yml`. See `config.example.yml` for a 
 
 | Field | Description | Default |
 |-------|-------------|---------|
-| `datadog.api_key` | Datadog API key | (required) |
-| `datadog.app_key` | Datadog Application key | (required) |
-| `datadog.site` | Datadog site | `datadoghq.eu` |
+| `datadog.token` | Datadog PAT ([create here](https://app.datadoghq.eu/personal-settings/personal-access-tokens)) | (required) |
+| `datadog.site` | Datadog site (e.g. `datadoghq.eu`, **not** your org subdomain) | `datadoghq.eu` |
 | `datadog.services` | Service names to monitor | `[]` |
 | `scan.interval` | Daemon poll interval | `15m` |
 | `scan.since` | How far back to look | `24h` |
@@ -57,6 +56,17 @@ All configuration lives in `~/.fido/config.yml`. See `config.example.yml` for a 
 | `agent.fix` | Agent command for fixes | `claude -p` |
 
 No environment variables are needed — everything is configured via the YAML file.
+
+### Datadog PAT Scopes
+
+Your Personal Access Token needs these scopes:
+
+| Scope | Used by |
+|-------|---------|
+| `error_tracking_issue_read` | `fido scan` — listing error tracking issues |
+| `logs_read_data` | `fido scan` — fetching surrounding logs by trace ID |
+
+**Important:** The `site` field is the Datadog site domain (e.g. `datadoghq.eu`), not your organization's subdomain. If your Datadog URL is `https://myorg.datadoghq.eu`, set `site: "datadoghq.eu"` — the API always lives at `api.datadoghq.eu`.
 
 ## CLI Usage
 
