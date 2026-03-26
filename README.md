@@ -26,13 +26,16 @@ The AI agent takes both the error and investigation reports, implements the fix 
 Datadog Error Tracking
         │
         ▼
-   fido scan          → error.md
+   fido scan          → error.md + CI status refresh
         │
         ▼
    fido investigate   → investigation.md
         │
         ▼
    fido fix           → fix.md + draft MR
+        │
+        ▼ (if CI fails)
+   fido fix --iterate → fix-2.md (pushes to existing branch)
 ```
 
 ## Getting Started
@@ -68,6 +71,9 @@ fido investigate <issue-id> [--service <name>]
 # Fix an error (creates draft MR)
 fido fix <issue-id> [--service <name>]
 
+# Iterate on a fix when CI is failing (pushes to existing branch, no new MR)
+fido fix <issue-id> --iterate [--service <name>]
+
 # List tracked issues
 fido list [--status scanned|investigated|fixed]
 
@@ -89,6 +95,7 @@ fido list --status scanned       # see what's new
 fido investigate <issue-id>      # AI root-cause analysis
 fido show <issue-id>             # review the investigation
 fido fix <issue-id>              # AI implements fix + draft MR
+fido fix <issue-id> --iterate   # re-fix if CI is failing (uses CI logs as context)
 ```
 
 ## Web Dashboard
@@ -117,6 +124,8 @@ Open **http://localhost:3000** to access the dashboard.
 - **Issue detail view** — read the error report, investigation, and fix side-by-side
 - **One-click investigate / fix** — kick off AI phases with progress streaming
 - **MR links** — jump straight to the draft Merge Request when a fix is ready
+- **CI status** — pipeline status badge (passed/failed/running/pending) shown for all fixed issues, updated on every scan
+- **Re-fix (CI failing)** — when CI is red, trigger a new fix iteration directly from the UI; the agent receives the CI failure logs and previous fix as context
 - **Ignore / unignore** — dismiss noisy issues without losing them
 
 ## Configuration
