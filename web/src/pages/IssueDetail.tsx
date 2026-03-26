@@ -21,6 +21,7 @@ export function IssueDetail() {
   const [investigateState, setInvestigateState] = useState<RunningState>('idle');
   const [fixState, setFixState] = useState<RunningState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [progressLog, setProgressLog] = useState<string>('');
   const sseRef = useRef<EventSource | null>(null);
 
   const fetchIssue = async () => {
@@ -44,9 +45,14 @@ export function IssueDetail() {
   const startSSE = (onComplete: () => void) => {
     if (!id) return;
     sseRef.current?.close();
+    setProgressLog('');
     sseRef.current = subscribeProgress(id, (data) => {
+      if (data.log) {
+        setProgressLog((prev) => prev + data.log);
+      }
       if (data.status === 'complete') {
         sseRef.current?.close();
+        setProgressLog('');
         onComplete();
       } else if (data.status === 'error') {
         sseRef.current?.close();
@@ -143,13 +149,19 @@ export function IssueDetail() {
         >
           {issue.investigation ? (
             <MarkdownViewer title="" content={issue.investigation} />
-          ) : investigateState !== 'running' ? (
+          ) : investigateState === 'running' ? (
+            progressLog ? (
+              <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
+                {progressLog}
+              </pre>
+            ) : null
+          ) : (
             <div className="p-4">
               <Button size="sm" onClick={handleInvestigate}>
                 Investigate this issue
               </Button>
             </div>
-          ) : null}
+          )}
         </Section>
 
         {/* Fix */}
@@ -161,7 +173,13 @@ export function IssueDetail() {
         >
           {issue.fix ? (
             <MarkdownViewer title="" content={issue.fix} />
-          ) : issue.investigation && fixState !== 'running' ? (
+          ) : fixState === 'running' ? (
+            progressLog ? (
+              <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
+                {progressLog}
+              </pre>
+            ) : null
+          ) : issue.investigation ? (
             <div className="p-4">
               <Button size="sm" onClick={handleFix}>
                 Fix this issue

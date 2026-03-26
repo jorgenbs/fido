@@ -34,7 +34,7 @@ func TestFix_LaunchesInteractiveAgentAndChecksOutput(t *testing.T) {
 		},
 	}
 
-	err := runFix("issue-1", "svc-a", cfg, mgr)
+	err := runFix("issue-1", "svc-a", cfg, mgr, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -51,7 +51,7 @@ func TestFix_FailsWithoutInvestigation(t *testing.T) {
 	mgr.WriteError("issue-1", "error")
 
 	cfg := &config.Config{}
-	err := runFix("issue-1", "svc-a", cfg, mgr)
+	err := runFix("issue-1", "svc-a", cfg, mgr, nil)
 	if err == nil {
 		t.Error("expected error when no investigation.md exists")
 	}

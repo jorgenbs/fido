@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -37,7 +38,7 @@ var fixCmd = &cobra.Command{
 				return fmt.Errorf("could not determine service — use --service flag")
 			}
 		}
-		return runFix(issueID, service, cfg, mgr)
+		return runFix(issueID, service, cfg, mgr, nil)
 	},
 }
 
@@ -70,7 +71,7 @@ const fixPromptTemplate = `You are fixing a production error. Use the error repo
    {"branch":"<branch-name>","mr_url":"<mr-url>","mr_status":"draft","service":"%s","datadog_issue_id":"%s","datadog_url":"%s","created_at":"<RFC3339 timestamp>"}
 `
 
-func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) error {
+func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager, progress io.Writer) error {
 	errorContent, err := mgr.ReadError(issueID)
 	if err != nil {
 		return fmt.Errorf("no error report for issue %s: %w", issueID, err)
@@ -97,7 +98,7 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) e
 		service, issueID, datadogURL,
 	)
 
-	runner := &agent.Runner{Command: cfg.Agent.Fix}
+	runner := &agent.Runner{Command: cfg.Agent.Fix, Progress: progress}
 	if err := runner.RunInteractive(prompt, repoPath); err != nil {
 		return fmt.Errorf("agent failed: %w", err)
 	}

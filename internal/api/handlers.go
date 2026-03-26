@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,8 +37,26 @@ type IssueDetail struct {
 }
 
 type ScanFunc func() error
-type InvestigateFunc func(issueID string) error
-type FixFunc func(issueID string) error
+type InvestigateFunc func(issueID string, progress io.Writer) error
+type FixFunc func(issueID string, progress io.Writer) error
+
+// progressBuf is a thread-safe write buffer for streaming agent output to SSE clients.
+type progressBuf struct {
+	mu      sync.Mutex
+	content strings.Builder
+}
+
+func (p *progressBuf) Write(b []byte) (int, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.content.Write(b)
+}
+
+func (p *progressBuf) ReadAll() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.content.String()
+}
 
 type Handlers struct {
 	reports       *reports.Manager
@@ -45,6 +65,7 @@ type Handlers struct {
 	investigateFn InvestigateFunc
 	fixFn         FixFunc
 	running       sync.Map
+	progressBufs  sync.Map // issueID -> *progressBuf
 }
 
 func NewHandlers(mgr *reports.Manager, cfg *config.Config) *Handlers {
@@ -142,9 +163,11 @@ func (h *Handlers) TriggerInvestigate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "investigate not configured")
 		return
 	}
+	pbuf := &progressBuf{}
+	h.progressBufs.Store(id, pbuf)
 	go func() {
 		defer h.running.Delete(id)
-		if err := h.investigateFn(id); err != nil {
+		if err := h.investigateFn(id, pbuf); err != nil {
 			log.Printf("investigate %s failed: %v", id, err)
 			h.running.Store(id+"_error", err.Error())
 		}
@@ -167,9 +190,11 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "fix not configured")
 		return
 	}
+	pbuf := &progressBuf{}
+	h.progressBufs.Store(id, pbuf)
 	go func() {
 		defer h.running.Delete(id)
-		if err := h.fixFn(id); err != nil {
+		if err := h.fixFn(id, pbuf); err != nil {
 			log.Printf("fix %s failed: %v", id, err)
 			h.running.Store(id+"_error", err.Error())
 		}
@@ -215,21 +240,42 @@ func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var lastSent int
+
+	sendLog := func(chunk string) {
+		data, _ := json.Marshal(map[string]string{"status": "running", "log": chunk})
+		fmt.Fprintf(w, "data: %s\n\n", data)
+		flusher.Flush()
+	}
+
+	drainLog := func() {
+		if pbuf, ok := h.progressBufs.Load(id); ok {
+			content := pbuf.(*progressBuf).ReadAll()
+			if len(content) > lastSent {
+				sendLog(content[lastSent:])
+				lastSent = len(content)
+			}
+		}
+	}
+
 	for {
+		// Stream any new log content
+		drainLog()
+
 		if errMsg, hasErr := h.running.Load(id + "_error"); hasErr {
 			h.running.Delete(id + "_error")
+			drainLog() // flush remaining output before error
 			fmt.Fprintf(w, "data: {\"status\":\"error\",\"message\":%q}\n\n", errMsg)
 			flusher.Flush()
 			return
 		}
 		if _, running := h.running.Load(id); !running {
+			drainLog() // flush remaining output before complete
 			fmt.Fprintf(w, "data: {\"status\":\"complete\"}\n\n")
 			flusher.Flush()
 			return
 		}
-		fmt.Fprintf(w, "data: {\"status\":\"running\"}\n\n")
-		flusher.Flush()
-		time.Sleep(2 * time.Second)
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 

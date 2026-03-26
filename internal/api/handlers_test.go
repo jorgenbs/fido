@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -185,7 +186,7 @@ func TestTriggerInvestigateHandler(t *testing.T) {
 
 	investigateCalled := ""
 	h := NewHandlers(mgr, nil)
-	h.SetInvestigateFunc(func(issueID string) error {
+	h.SetInvestigateFunc(func(issueID string, _ io.Writer) error {
 		investigateCalled = issueID
 		return nil
 	})

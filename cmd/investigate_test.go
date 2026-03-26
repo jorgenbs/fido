@@ -24,7 +24,7 @@ func TestInvestigate_ProducesInvestigationReport(t *testing.T) {
 		},
 	}
 
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestInvestigate_FailsWithoutErrorReport(t *testing.T) {
 	mgr := reports.NewManager(reportsDir)
 
 	cfg := &config.Config{}
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
 	if err == nil {
 		t.Error("expected error when no error.md exists")
 	}
@@ -71,7 +71,7 @@ func TestRunInvestigate_IncludesContextLinks(t *testing.T) {
 		Agent:        config.AgentConfig{Investigate: "cat"},
 	}
 
-	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil)
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

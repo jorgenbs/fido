@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,7 +43,7 @@ var investigateCmd = &cobra.Command{
 			}
 		}
 		ddClient, _ := datadog.NewClient(cfg.Datadog.Token, cfg.Datadog.Site, cfg.Datadog.OrgSubdomain)
-		return runInvestigate(issueID, service, cfg, mgr, ddClient)
+		return runInvestigate(issueID, service, cfg, mgr, ddClient, nil)
 	},
 }
 
@@ -70,18 +72,21 @@ Write your analysis as markdown with these sections:
 - **Complexity**: Simple/Moderate/Complex
 `
 
-func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client) error {
+func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client, progress io.Writer) error {
+	log.Printf("[investigate] %s: reading error report", issueID)
 	errorContent, err := mgr.ReadError(issueID)
 	if err != nil {
 		return fmt.Errorf("no error report for issue %s: %w", issueID, err)
 	}
 
+	log.Printf("[investigate] %s: resolving repo for service %q", issueID, service)
 	repoPath, err := resolveRepoPath(service, cfg)
 	if err != nil {
 		return err
 	}
 
 	// Build context section from meta.json + optional Datadog traces
+	log.Printf("[investigate] %s: fetching Datadog context", issueID)
 	var contextSection string
 	if meta, err := mgr.ReadMetadata(issueID); err == nil {
 		var issueCtx datadog.IssueContext
@@ -118,12 +123,14 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 
 	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent) + contextSection
 
-	runner := &agent.Runner{Command: cfg.Agent.Investigate}
+	log.Printf("[investigate] %s: starting agent %q (repo=%s, prompt=%d bytes)", issueID, cfg.Agent.Investigate, repoPath, len(prompt))
+	runner := &agent.Runner{Command: cfg.Agent.Investigate, Progress: progress}
 	output, err := runner.Run(prompt, repoPath)
 	if err != nil {
 		return fmt.Errorf("agent failed: %w", err)
 	}
 
+	log.Printf("[investigate] %s: writing investigation report (%d bytes)", issueID, len(output))
 	if err := mgr.WriteInvestigation(issueID, output); err != nil {
 		return fmt.Errorf("writing investigation report: %w", err)
 	}

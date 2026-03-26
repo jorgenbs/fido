@@ -80,7 +80,7 @@ export async function unignoreIssue(id: string): Promise<void> {
 
 export function subscribeProgress(
   id: string,
-  onMessage: (data: { status: string; message?: string }) => void
+  onMessage: (data: { status: string; message?: string; log?: string }) => void
 ): EventSource {
   const es = new EventSource(`${API_BASE}/api/issues/${encodeURIComponent(id)}/progress`);
   es.onmessage = (event) => {

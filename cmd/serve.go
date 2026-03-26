@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,7 +42,7 @@ var serveCmd = &cobra.Command{
 			fmt.Printf("API scan complete: %d new issues\n", count)
 			return nil
 		})
-		handlers.SetInvestigateFunc(func(issueID string) error {
+		handlers.SetInvestigateFunc(func(issueID string, progress io.Writer) error {
 			service := ""
 			if meta, err := mgr.ReadMetadata(issueID); err == nil {
 				service = meta.Service
@@ -50,9 +51,9 @@ var serveCmd = &cobra.Command{
 				errorContent, _ := mgr.ReadError(issueID)
 				service = extractServiceFromReport(errorContent)
 			}
-			return runInvestigate(issueID, service, cfg, mgr, ddClient)
+			return runInvestigate(issueID, service, cfg, mgr, ddClient, progress)
 		})
-		handlers.SetFixFunc(func(issueID string) error {
+		handlers.SetFixFunc(func(issueID string, progress io.Writer) error {
 			service := ""
 			if meta, err := mgr.ReadMetadata(issueID); err == nil {
 				service = meta.Service
@@ -61,7 +62,7 @@ var serveCmd = &cobra.Command{
 				errorContent, _ := mgr.ReadError(issueID)
 				service = extractServiceFromReport(errorContent)
 			}
-			return runFix(issueID, service, cfg, mgr)
+			return runFix(issueID, service, cfg, mgr, progress)
 		})
 
 		fmt.Printf("Fido API server listening on :%s\n", port)
