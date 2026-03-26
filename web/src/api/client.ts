@@ -3,6 +3,12 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 export interface IssueListItem {
   id: string;
   stage: string;
+  title: string;
+  service: string;
+  last_seen: string;
+  count: number;
+  mr_url: string | null;
+  ignored: boolean;
 }
 
 export interface ResolveData {
@@ -24,9 +30,10 @@ export interface IssueDetail {
   resolve: ResolveData | null;
 }
 
-export async function listIssues(status?: string): Promise<IssueListItem[]> {
+export async function listIssues(status?: string, showIgnored?: boolean): Promise<IssueListItem[]> {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
+  if (showIgnored) params.set('show_ignored', 'true');
   const res = await fetch(`${API_BASE}/api/issues?${params}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
@@ -57,8 +64,31 @@ export async function triggerScan(): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
-export function subscribeProgress(id: string, onMessage: (data: string) => void): EventSource {
+export async function ignoreIssue(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/ignore`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export async function unignoreIssue(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/unignore`, {
+    method: 'POST',
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+}
+
+export function subscribeProgress(
+  id: string,
+  onMessage: (data: { status: string; message?: string }) => void
+): EventSource {
   const es = new EventSource(`${API_BASE}/api/issues/${encodeURIComponent(id)}/progress`);
-  es.onmessage = (event) => onMessage(event.data);
+  es.onmessage = (event) => {
+    try {
+      onMessage(JSON.parse(event.data));
+    } catch {
+      // ignore malformed events
+    }
+  };
   return es;
 }
