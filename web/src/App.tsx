@@ -1,17 +1,20 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { IssueDetail } from './pages/IssueDetail';
+import { applyTheme, getInitialTheme } from './lib/theme';
 
-export function App() {
+export default function App() {
+  useEffect(() => {
+    applyTheme(getInitialTheme());
+  }, []);
+
   return (
     <BrowserRouter>
-      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '1rem' }}>
-        <h1>Fido</h1>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/issues/:id" element={<IssueDetail />} />
-        </Routes>
-      </div>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/issues/:id" element={<IssueDetail />} />
+      </Routes>
     </BrowserRouter>
   );
 }
