@@ -107,7 +107,7 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) e
 		MRStatus:       "draft",
 		Service:        service,
 		DatadogIssueID: issueID,
-		DatadogURL:     fmt.Sprintf("https://app.%s/error-tracking/issue/%s", cfg.Datadog.Site, issueID),
+		DatadogURL:     fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issueID),
 	}
 	if err := mgr.WriteResolve(issueID, resolve); err != nil {
 		return fmt.Errorf("writing resolve data: %w", err)

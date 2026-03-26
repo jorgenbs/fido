@@ -16,9 +16,10 @@ type Config struct {
 }
 
 type DatadogConfig struct {
-	Token    string   `yaml:"token"`
-	Site     string   `yaml:"site"`
-	Services []string `yaml:"services"`
+	Token        string   `yaml:"token"`
+	Site         string   `yaml:"site"`
+	OrgSubdomain string   `yaml:"org_subdomain"`
+	Services     []string `yaml:"services"`
 }
 
 type ScanConfig struct {
@@ -44,7 +45,8 @@ func Load(path string) (*Config, error) {
 
 	cfg := &Config{
 		Datadog: DatadogConfig{
-			Site: "datadoghq.eu",
+			Site:         "datadoghq.eu",
+			OrgSubdomain: "app",
 		},
 		Scan: ScanConfig{
 			Interval: "15m",
