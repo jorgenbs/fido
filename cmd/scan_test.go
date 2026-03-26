@@ -81,6 +81,17 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 	if !strings.Contains(content, "NullPointerException") {
 		t.Error("expected error report to contain error title")
 	}
+
+	meta, err := mgr.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if meta.Service != "svc-a" {
+		t.Errorf("expected service=svc-a, got %q", meta.Service)
+	}
+	if meta.Title != "NullPointerException" {
+		t.Errorf("expected title=NullPointerException, got %q", meta.Title)
+	}
 }
 
 func TestScanCommand_SkipsExistingIssues(t *testing.T) {

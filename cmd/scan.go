@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"text/template"
+	"time"
 
 	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/datadog"
@@ -41,7 +42,7 @@ var scanCmd = &cobra.Command{
 		}
 
 		scanCfg := &config.Config{
-			Datadog: config.DatadogConfig{Services: services, Site: cfg.Datadog.Site},
+			Datadog: config.DatadogConfig{Services: services, Site: cfg.Datadog.Site, OrgSubdomain: cfg.Datadog.OrgSubdomain},
 			Scan:    config.ScanConfig{Since: since},
 		}
 
@@ -108,6 +109,21 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 		if err := mgr.WriteError(issue.ID, buf.String()); err != nil {
 			return count, fmt.Errorf("writing error report: %w", err)
 		}
+
+		meta := &reports.MetaData{
+			Title:            issue.Attributes.Title,
+			Service:          issue.Attributes.Service,
+			Env:              issue.Attributes.Env,
+			FirstSeen:        issue.Attributes.FirstSeen,
+			LastSeen:         issue.Attributes.LastSeen,
+			Count:            issue.Attributes.Count,
+			DatadogURL:       data.DatadogURL,
+			DatadogEventsURL: buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen),
+			DatadogTraceURL:  buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen),
+		}
+		if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
+			return count, fmt.Errorf("writing metadata: %w", err)
+		}
 		count++
 	}
 
@@ -157,6 +173,24 @@ _No surrounding logs found_
 - [Datadog Issue]({{.DatadogURL}})
 `
 	return template.New("error").Parse(defaultTemplate)
+}
+
+func buildEventsURL(org, site, service, env, firstSeen, lastSeen string) string {
+	from, _ := time.Parse(time.RFC3339, firstSeen)
+	to, _ := time.Parse(time.RFC3339, lastSeen)
+	return fmt.Sprintf(
+		"https://%s.%s/event/explorer?query=service:%s env:%s&from=%d&to=%d",
+		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
+	)
+}
+
+func buildTracesURL(org, site, service, env, firstSeen, lastSeen string) string {
+	from, _ := time.Parse(time.RFC3339, firstSeen)
+	to, _ := time.Parse(time.RFC3339, lastSeen)
+	return fmt.Sprintf(
+		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
+		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
+	)
 }
 
 func init() {
