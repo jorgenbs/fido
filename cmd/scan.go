@@ -176,8 +176,14 @@ _No surrounding logs found_
 }
 
 func buildEventsURL(org, site, service, env, firstSeen, lastSeen string) string {
-	from, _ := time.Parse(time.RFC3339, firstSeen)
-	to, _ := time.Parse(time.RFC3339, lastSeen)
+	from, err := time.Parse(time.RFC3339, firstSeen)
+	if err != nil {
+		return ""
+	}
+	to, err := time.Parse(time.RFC3339, lastSeen)
+	if err != nil {
+		return ""
+	}
 	return fmt.Sprintf(
 		"https://%s.%s/event/explorer?query=service:%s env:%s&from=%d&to=%d",
 		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
@@ -185,8 +191,14 @@ func buildEventsURL(org, site, service, env, firstSeen, lastSeen string) string 
 }
 
 func buildTracesURL(org, site, service, env, firstSeen, lastSeen string) string {
-	from, _ := time.Parse(time.RFC3339, firstSeen)
-	to, _ := time.Parse(time.RFC3339, lastSeen)
+	from, err := time.Parse(time.RFC3339, firstSeen)
+	if err != nil {
+		return ""
+	}
+	to, err := time.Parse(time.RFC3339, lastSeen)
+	if err != nil {
+		return ""
+	}
 	return fmt.Sprintf(
 		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
 		org, site, service, env, from.UnixMilli(), to.UnixMilli(),

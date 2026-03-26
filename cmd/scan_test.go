@@ -60,8 +60,9 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 
 	cfg := &config.Config{
 		Datadog: config.DatadogConfig{
-			Services: []string{"svc-a"},
-			Site:     "test.datadoghq.com",
+			Services:     []string{"svc-a"},
+			Site:         "test.datadoghq.com",
+			OrgSubdomain: "myorg",
 		},
 		Scan: config.ScanConfig{Since: "24h"},
 	}
@@ -91,6 +92,15 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 	}
 	if meta.Title != "NullPointerException" {
 		t.Errorf("expected title=NullPointerException, got %q", meta.Title)
+	}
+	if !strings.Contains(meta.DatadogURL, "myorg") {
+		t.Errorf("expected DatadogURL to contain myorg, got %q", meta.DatadogURL)
+	}
+	if !strings.Contains(meta.DatadogEventsURL, "myorg") && meta.DatadogEventsURL != "" {
+		t.Errorf("expected DatadogEventsURL to contain myorg, got %q", meta.DatadogEventsURL)
+	}
+	if !strings.Contains(meta.DatadogTraceURL, "myorg") && meta.DatadogTraceURL != "" {
+		t.Errorf("expected DatadogTraceURL to contain myorg, got %q", meta.DatadogTraceURL)
 	}
 }
 
