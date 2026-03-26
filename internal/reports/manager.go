@@ -27,9 +27,24 @@ type ResolveData struct {
 	CreatedAt      string `json:"created_at"`
 }
 
+type MetaData struct {
+	Title            string `json:"title"`
+	Service          string `json:"service"`
+	Env              string `json:"env"`
+	FirstSeen        string `json:"first_seen"`
+	LastSeen         string `json:"last_seen"`
+	Count            int64  `json:"count"`
+	DatadogURL       string `json:"datadog_url"`
+	DatadogEventsURL string `json:"datadog_events_url"`
+	DatadogTraceURL  string `json:"datadog_trace_url"`
+	Ignored          bool   `json:"ignored"`
+}
+
 type IssueSummary struct {
 	ID    string
 	Stage Stage
+	Meta  *MetaData // nil if meta.json not present (pre-v2 issue)
+	MRURL string    // from resolve.json if present
 }
 
 type Manager struct {
@@ -112,6 +127,35 @@ func (m *Manager) ReadResolve(issueID string) (*ResolveData, error) {
 	return &data, nil
 }
 
+func (m *Manager) WriteMetadata(issueID string, data *MetaData) error {
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling metadata: %w", err)
+	}
+	return m.writeFile(issueID, "meta.json", string(b))
+}
+
+func (m *Manager) ReadMetadata(issueID string) (*MetaData, error) {
+	content, err := m.readFile(issueID, "meta.json")
+	if err != nil {
+		return nil, err
+	}
+	var data MetaData
+	if err := json.Unmarshal([]byte(content), &data); err != nil {
+		return nil, fmt.Errorf("parsing meta.json: %w", err)
+	}
+	return &data, nil
+}
+
+func (m *Manager) SetIgnored(issueID string, ignored bool) error {
+	meta, err := m.ReadMetadata(issueID)
+	if err != nil {
+		return fmt.Errorf("reading metadata: %w", err)
+	}
+	meta.Ignored = ignored
+	return m.WriteMetadata(issueID, meta)
+}
+
 func (m *Manager) Stage(issueID string) Stage {
 	if !m.fileExists(issueID, "error.md") {
 		return StageUnknown
@@ -129,7 +173,7 @@ func (m *Manager) Exists(issueID string) bool {
 	return m.fileExists(issueID, "error.md")
 }
 
-func (m *Manager) ListIssues() ([]IssueSummary, error) {
+func (m *Manager) ListIssues(showIgnored bool) ([]IssueSummary, error) {
 	entries, err := os.ReadDir(m.baseDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -144,12 +188,20 @@ func (m *Manager) ListIssues() ([]IssueSummary, error) {
 			continue
 		}
 		id := entry.Name()
-		if m.fileExists(id, "error.md") {
-			issues = append(issues, IssueSummary{
-				ID:    id,
-				Stage: m.Stage(id),
-			})
+		if !m.fileExists(id, "error.md") {
+			continue
 		}
+		summary := IssueSummary{ID: id, Stage: m.Stage(id)}
+		if meta, err := m.ReadMetadata(id); err == nil {
+			summary.Meta = meta
+			if !showIgnored && meta.Ignored {
+				continue
+			}
+		}
+		if resolve, err := m.ReadResolve(id); err == nil {
+			summary.MRURL = resolve.MRURL
+		}
+		issues = append(issues, summary)
 	}
 	return issues, nil
 }

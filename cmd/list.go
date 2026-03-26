@@ -27,7 +27,7 @@ var listCmd = &cobra.Command{
 }
 
 func runList(mgr *reports.Manager, statusFilter, serviceFilter string, w io.Writer) error {
-	issues, err := mgr.ListIssues()
+	issues, err := mgr.ListIssues(false)
 	if err != nil {
 		return err
 	}

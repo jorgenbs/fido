@@ -68,12 +68,101 @@ func TestManager_ListIssues(t *testing.T) {
 	m.WriteError("issue-2", "error 2")
 	m.WriteInvestigation("issue-2", "investigation 2")
 
-	issues, err := m.ListIssues()
+	issues, err := m.ListIssues(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(issues) != 2 {
 		t.Fatalf("expected 2 issues, got %d", len(issues))
+	}
+}
+
+func TestManager_WriteAndReadMetadata(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	meta := &MetaData{
+		Title:            "NullPointerException",
+		Service:          "payment-svc",
+		Env:              "production",
+		FirstSeen:        "2026-03-25T10:00:00Z",
+		LastSeen:         "2026-03-26T09:00:00Z",
+		Count:            47,
+		DatadogURL:       "https://ruter.datadoghq.eu/error-tracking/issue/abc",
+		DatadogEventsURL: "https://ruter.datadoghq.eu/event/explorer?query=service:payment-svc",
+		DatadogTraceURL:  "https://ruter.datadoghq.eu/apm/traces?query=service:payment-svc",
+		Ignored:          false,
+	}
+
+	if err := m.WriteMetadata("issue-1", meta); err != nil {
+		t.Fatalf("WriteMetadata: %v", err)
+	}
+	got, err := m.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if got.Title != meta.Title {
+		t.Errorf("title: got %q, want %q", got.Title, meta.Title)
+	}
+	if got.Service != meta.Service {
+		t.Errorf("service: got %q, want %q", got.Service, meta.Service)
+	}
+}
+
+func TestManager_SetIgnored(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a"})
+
+	if err := m.SetIgnored("issue-1", true); err != nil {
+		t.Fatalf("SetIgnored: %v", err)
+	}
+	meta, _ := m.ReadMetadata("issue-1")
+	if !meta.Ignored {
+		t.Error("expected ignored=true")
+	}
+
+	m.SetIgnored("issue-1", false)
+	meta, _ = m.ReadMetadata("issue-1")
+	if meta.Ignored {
+		t.Error("expected ignored=false")
+	}
+}
+
+func TestManager_ListIssues_FiltersIgnored(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteError("issue-1", "error")
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a", Ignored: false})
+	m.WriteError("issue-2", "error")
+	m.WriteMetadata("issue-2", &MetaData{Service: "svc-b", Ignored: true})
+
+	visible, _ := m.ListIssues(false)
+	if len(visible) != 1 {
+		t.Errorf("expected 1 visible issue, got %d", len(visible))
+	}
+
+	all, _ := m.ListIssues(true)
+	if len(all) != 2 {
+		t.Errorf("expected 2 issues with show_ignored, got %d", len(all))
+	}
+}
+
+func TestManager_ListIssues_EnrichesFromMeta(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteError("issue-1", "error")
+	m.WriteMetadata("issue-1", &MetaData{Title: "NullPointer", Service: "svc-a"})
+
+	issues, _ := m.ListIssues(false)
+	if issues[0].Meta == nil {
+		t.Fatal("expected Meta to be populated")
+	}
+	if issues[0].Meta.Service != "svc-a" {
+		t.Errorf("service: got %q", issues[0].Meta.Service)
 	}
 }
 

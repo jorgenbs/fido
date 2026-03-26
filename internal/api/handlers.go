@@ -49,7 +49,7 @@ func (h *Handlers) SetInvestigateFunc(fn InvestigateFunc) { h.investigateFn = fn
 func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
 
 func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
-	issues, err := h.reports.ListIssues()
+	issues, err := h.reports.ListIssues(false)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
