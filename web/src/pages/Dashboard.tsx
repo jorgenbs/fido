@@ -132,6 +132,11 @@ export function Dashboard() {
               >
                 <span className="font-medium text-sm truncate pr-2">
                   {issue.title || issue.id}
+                  {issue.message && (
+                    <span className="ml-1.5 text-muted-foreground font-normal">
+                      — {issue.message.length > 200 ? issue.message.slice(0, 200) + '…' : issue.message}
+                    </span>
+                  )}
                   {expandedId === issue.id && (
                     <span className="ml-1.5 text-blue-400 text-xs">▾</span>
                   )}

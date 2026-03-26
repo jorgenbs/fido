@@ -4,6 +4,7 @@ export interface IssueListItem {
   id: string;
   stage: string;
   title: string;
+  message: string;
   service: string;
   last_seen: string;
   count: number;

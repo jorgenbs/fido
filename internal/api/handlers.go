@@ -20,6 +20,7 @@ type IssueListItem struct {
 	ID       string  `json:"id"`
 	Stage    string  `json:"stage"`
 	Title    string  `json:"title,omitempty"`
+	Message  string  `json:"message,omitempty"`
 	Service  string  `json:"service,omitempty"`
 	LastSeen string  `json:"last_seen,omitempty"`
 	Count    int64   `json:"count,omitempty"`
@@ -101,6 +102,7 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		if issue.Meta != nil {
 			item.Title    = issue.Meta.Title
+			item.Message  = issue.Meta.Message
 			item.Service  = issue.Meta.Service
 			item.LastSeen = issue.Meta.LastSeen
 			item.Count    = issue.Meta.Count
