@@ -174,11 +174,12 @@ func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssu
 	return issues, nil
 }
 
-// IssueContext holds deep-link URLs and trace references for a Datadog issue.
+// IssueContext holds deep-link URLs, trace references, and a stack trace for a Datadog issue.
 type IssueContext struct {
-	Traces    []TraceRef
-	EventsURL string
-	TracesURL string
+	Traces     []TraceRef
+	EventsURL  string
+	TracesURL  string
+	StackTrace string
 }
 
 // TraceRef is a reference to a single Datadog trace.
@@ -219,7 +220,7 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		TracesURL: tracesURL,
 	}
 
-	query := fmt.Sprintf("service:%s", service)
+	query := fmt.Sprintf("service:%s status:error", service)
 	if env != "" {
 		query += " env:" + env
 	}
@@ -256,6 +257,14 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		}
 		traceURL := fmt.Sprintf("https://%s.%s/apm/trace/%s", c.orgSubdomain, c.site, url.PathEscape(traceID))
 		ctx.Traces = append(ctx.Traces, TraceRef{TraceID: traceID, URL: traceURL})
+
+		if ctx.StackTrace == "" {
+			if custom := attrs.GetCustom(); custom != nil {
+				if stack, ok := custom["error.stack"].(string); ok {
+					ctx.StackTrace = stack
+				}
+			}
+		}
 	}
 
 	return ctx, nil

@@ -118,6 +118,9 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			if issueCtx.TracesURL != "" {
 				data.TracesURL = issueCtx.TracesURL
 			}
+			if data.StackTrace == "" && issueCtx.StackTrace != "" {
+				data.StackTrace = issueCtx.StackTrace
+			}
 		}
 
 		var buf bytes.Buffer
