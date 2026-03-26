@@ -5,9 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
@@ -176,6 +178,62 @@ func TestHandlers_TriggerUnignore_NotFound(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestTriggerFix_IterateFlag(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	var gotIterate bool
+	h := NewHandlers(mgr, &config.Config{})
+	h.SetFixFunc(func(id string, iterate bool, progress io.Writer) error {
+		gotIterate = iterate
+		return nil
+	})
+
+	body := strings.NewReader(`{"iterate":true}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/issues/issue-1/fix", body)
+	req = withURLParam(req, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.TriggerFix(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("status: got %d, want %d", w.Code, http.StatusAccepted)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if !gotIterate {
+		t.Error("expected iterate=true to be passed to FixFunc")
+	}
+}
+
+func TestListIssues_IncludesCIStatus(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service:  "svc-a",
+		CIStatus: "failed",
+		CIURL:    "https://gitlab.com/org/repo/-/pipelines/42",
+	})
+
+	h := NewHandlers(mgr, &config.Config{})
+	req := httptest.NewRequest(http.MethodGet, "/api/issues", nil)
+	w := httptest.NewRecorder()
+	h.ListIssues(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", w.Code)
+	}
+	var items []IssueListItem
+	json.NewDecoder(w.Body).Decode(&items)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(items))
+	}
+	if items[0].CIStatus != "failed" {
+		t.Errorf("CIStatus: got %q, want %q", items[0].CIStatus, "failed")
 	}
 }
 
