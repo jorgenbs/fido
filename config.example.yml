@@ -21,5 +21,6 @@ repositories:
   #   git: "https://gitlab.com/org/another-service.git"
 
 agent:
-  investigate: "claude -p"  # Command prefix for investigation agent
-  fix: "claude -p"          # Command prefix for fix agent
+  # --dangerously-skip-permissions avoids tool-call permission prompts when running non-interactively.
+  investigate: "claude -p --dangerously-skip-permissions"
+  fix: "claude --dangerously-skip-permissions"

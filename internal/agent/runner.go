@@ -28,9 +28,17 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 		writers = append(writers, r.Progress)
 	}
 	cmd.Stdout = io.MultiWriter(writers...)
-	cmd.Stderr = os.Stderr
 
-	log.Printf("[agent] starting %q in %s (prompt: %d bytes)", r.Command, repoDir, len(promptContent))
+	// Capture stderr separately so it appears with a prefix and is captured for debugging.
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
+
+	// Log first 500 chars of prompt to help verify correct input.
+	preview := promptContent
+	if len(preview) > 500 {
+		preview = preview[:500] + "…"
+	}
+	log.Printf("[agent] starting %q in %s (prompt: %d bytes)\n--- prompt preview ---\n%s\n---", r.Command, repoDir, len(promptContent), preview)
 
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("starting agent: %w", err)
@@ -60,12 +68,12 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("agent failed (exit %d)", exitErr.ExitCode())
+			return "", fmt.Errorf("agent failed (exit %d); stderr: %s", exitErr.ExitCode(), stderrBuf.String())
 		}
-		return "", fmt.Errorf("running agent: %w", err)
+		return "", fmt.Errorf("running agent: %w; stderr: %s", err, stderrBuf.String())
 	}
 
-	log.Printf("[agent] completed (%d bytes output)", buf.Len())
+	log.Printf("[agent] completed (stdout: %d bytes, stderr: %d bytes)", buf.Len(), stderrBuf.Len())
 	return buf.String(), nil
 }
 
