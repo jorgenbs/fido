@@ -55,6 +55,7 @@ const investigatePromptTemplate = `You are investigating a production error. Ana
 
 ## Instructions
 
+0. Ensure you are on the latest main/master branch
 1. Analyze the error and stack trace
 2. Find the relevant code in the repository
 3. Identify the root cause
@@ -92,6 +93,13 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		var issueCtx datadog.IssueContext
 		if ddClient != nil {
 			issueCtx, _ = ddClient.FetchIssueContext(meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen)
+			// Fall back to pre-computed links from meta.json if the live fetch returned nothing.
+			if issueCtx.EventsURL == "" {
+				issueCtx.EventsURL = meta.DatadogEventsURL
+			}
+			if issueCtx.TracesURL == "" {
+				issueCtx.TracesURL = meta.DatadogTraceURL
+			}
 		} else {
 			// Use pre-computed deep links from meta.json
 			issueCtx = datadog.IssueContext{
@@ -99,6 +107,8 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 				TracesURL: meta.DatadogTraceURL,
 			}
 		}
+		log.Printf("[investigate] %s: context: traces=%d eventsURL=%v tracesURL=%v",
+			issueID, len(issueCtx.Traces), issueCtx.EventsURL != "", issueCtx.TracesURL != "")
 
 		var lines []string
 		if len(issueCtx.Traces) > 0 {
@@ -123,7 +133,7 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 
 	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent) + contextSection
 
-	log.Printf("[investigate] %s: starting agent %q (repo=%s, prompt=%d bytes)", issueID, cfg.Agent.Investigate, repoPath, len(prompt))
+	log.Printf("[investigate] %s: starting agent %q (repo=%s, error=%d bytes, prompt=%d bytes total)", issueID, cfg.Agent.Investigate, repoPath, len(errorContent), len(prompt))
 	runner := &agent.Runner{Command: cfg.Agent.Investigate, Progress: progress}
 	output, err := runner.Run(prompt, repoPath)
 	if err != nil {
