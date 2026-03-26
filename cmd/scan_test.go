@@ -7,46 +7,61 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/DataDog/datadog-api-client-go/v2/api/datadog"
+	ddclient "github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
+func newTestDDClient(t *testing.T, serverURL string) *ddclient.Client {
+	t.Helper()
+	c, err := ddclient.NewClient("token", "test.datadoghq.com")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	c.OverrideServers(datadog.ServerConfigurations{
+		{URL: serverURL, Description: "test"},
+	})
+	return c
+}
+
 func TestScanCommand_CreatesErrorReports(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.Contains(r.URL.Path, "error-tracking"):
-			resp := datadog.SearchIssuesResponse{
-				Data: []datadog.ErrorIssue{
-					{
-						ID: "issue-1",
-						Attributes: datadog.ErrorIssueAttributes{
-							Title:   "NullPointerException",
-							Message: "null in handler",
-							Service: "svc-a",
-							Env:     "prod",
-							Count:   10,
-							Status:  "open",
-						},
+		resp := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id":   "issue-1",
+					"type": "issues_search_result",
+					"attributes": map[string]interface{}{
+						"total_count": 10,
 					},
 				},
-			}
-			json.NewEncoder(w).Encode(resp)
-		case strings.Contains(r.URL.Path, "logs"):
-			resp := datadog.SearchLogsResponse{Data: []datadog.LogEntry{}}
-			json.NewEncoder(w).Encode(resp)
+			},
+			"included": []map[string]interface{}{
+				{
+					"id":   "issue-1",
+					"type": "issue",
+					"attributes": map[string]interface{}{
+						"error_type":    "NullPointerException",
+						"error_message": "null in handler",
+						"service":       "svc-a",
+						"state":         "OPEN",
+					},
+				},
+			},
 		}
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
 	reportsDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
-	ddClient := datadog.NewClient("token", server.URL)
+	ddClient := newTestDDClient(t, server.URL)
 
 	cfg := &config.Config{
 		Datadog: config.DatadogConfig{
 			Services: []string{"svc-a"},
-			Site:     server.URL,
+			Site:     "test.datadoghq.com",
 		},
 		Scan: config.ScanConfig{Since: "24h"},
 	}
@@ -70,9 +85,25 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 
 func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		resp := datadog.SearchIssuesResponse{
-			Data: []datadog.ErrorIssue{
-				{ID: "issue-1", Attributes: datadog.ErrorIssueAttributes{Title: "Err", Service: "svc-a"}},
+		resp := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id":   "issue-1",
+					"type": "issues_search_result",
+					"attributes": map[string]interface{}{
+						"total_count": 1,
+					},
+				},
+			},
+			"included": []map[string]interface{}{
+				{
+					"id":   "issue-1",
+					"type": "issue",
+					"attributes": map[string]interface{}{
+						"error_type": "Err",
+						"service":    "svc-a",
+					},
+				},
 			},
 		}
 		json.NewEncoder(w).Encode(resp)
@@ -81,7 +112,7 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 
 	reportsDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
-	ddClient := datadog.NewClient("token", server.URL)
+	ddClient := newTestDDClient(t, server.URL)
 
 	mgr.WriteError("issue-1", "existing report")
 

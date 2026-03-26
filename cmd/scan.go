@@ -21,10 +21,13 @@ var scanCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
-		ddClient := datadog.NewClient(
+		ddClient, err := datadog.NewClient(
 			cfg.Datadog.Token,
-			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
+			cfg.Datadog.Site,
 		)
+		if err != nil {
+			return err
+		}
 		ddClient.SetVerbose(verbose)
 
 		services, _ := cmd.Flags().GetStringSlice("service")
@@ -94,7 +97,7 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			Count:      issue.Attributes.Count,
 			Status:     issue.Attributes.Status,
 			StackTrace: issue.Attributes.StackTrace,
-			DatadogURL: fmt.Sprintf("https://app.%s/error-tracking/issue/%s", cfg.Datadog.Site, issue.ID),
+			DatadogURL: fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID),
 		}
 
 		var buf bytes.Buffer

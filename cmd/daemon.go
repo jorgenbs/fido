@@ -31,10 +31,13 @@ var daemonCmd = &cobra.Command{
 		home, _ := os.UserHomeDir()
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
-		ddClient := datadog.NewClient(
+		ddClient, err := datadog.NewClient(
 			cfg.Datadog.Token,
-			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
+			cfg.Datadog.Site,
 		)
+		if err != nil {
+			return err
+		}
 		ddClient.SetVerbose(verbose)
 
 		scanFn := func() error {
