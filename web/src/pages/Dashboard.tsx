@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listIssues,
@@ -20,24 +20,25 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const fetchIssues = async () => {
+  const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
       const data = await listIssues(filter || undefined, showIgnored);
       setIssues(data);
     } catch (err) {
       console.error('Failed to fetch issues:', err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [filter, showIgnored]);
 
   useEffect(() => {
     fetchIssues();
-  }, [filter, showIgnored]);
+  }, [fetchIssues]);
 
   const handleScan = async () => {
     await triggerScan();
-    fetchIssues();
+    await fetchIssues();
   };
 
   const handleIgnore = async (id: string, currentlyIgnored: boolean) => {
