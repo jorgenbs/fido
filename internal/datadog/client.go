@@ -1,6 +1,7 @@
 package datadog
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,6 +55,22 @@ type SearchLogsResponse struct {
 	Data []LogEntry `json:"data"`
 }
 
+// searchRequest is the request body for POST /api/v2/error-tracking/issues/search
+type searchRequest struct {
+	Data searchRequestData `json:"data"`
+}
+
+type searchRequestData struct {
+	Type       string                   `json:"type"`
+	Attributes searchRequestAttributes `json:"attributes"`
+}
+
+type searchRequestAttributes struct {
+	From  int64  `json:"from"`
+	To    int64  `json:"to"`
+	Query string `json:"query"`
+}
+
 func NewClient(token, baseURL string) *Client {
 	return &Client{
 		token:   token,
@@ -64,7 +81,7 @@ func NewClient(token, baseURL string) *Client {
 
 func (c *Client) SetVerbose(v bool) { c.verbose = v }
 
-func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
+func (c *Client) doRequest(method, path string, query url.Values, reqBody io.Reader) ([]byte, error) {
 	u := fmt.Sprintf("%s%s", c.baseURL, path)
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -74,7 +91,7 @@ func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
 		fmt.Fprintf(os.Stderr, "[datadog] %s %s\n", method, u)
 	}
 
-	req, err := http.NewRequest(method, u, nil)
+	req, err := http.NewRequest(method, u, reqBody)
 	if err != nil {
 		return nil, err
 	}
@@ -107,19 +124,49 @@ func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
 }
 
 func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssue, error) {
-	query := url.Values{}
-	if len(services) > 0 {
-		query.Set("filter[services]", strings.Join(services, ","))
+	// Parse the "since" duration (e.g. "24h") into a time range
+	dur, err := time.ParseDuration(since)
+	if err != nil {
+		return nil, fmt.Errorf("invalid since duration %q: %w", since, err)
 	}
-	query.Set("filter[since]", since)
 
-	body, err := c.do("GET", "/api/v2/error-tracking/issues", query)
+	now := time.Now()
+	from := now.Add(-dur)
+
+	// Build the search query
+	queryParts := []string{}
+	for _, svc := range services {
+		queryParts = append(queryParts, "service:"+svc)
+	}
+	queryStr := strings.Join(queryParts, " OR ")
+
+	reqBody := searchRequest{
+		Data: searchRequestData{
+			Type: "search_request",
+			Attributes: searchRequestAttributes{
+				From:  from.UnixMilli(),
+				To:    now.UnixMilli(),
+				Query: queryStr,
+			},
+		},
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling request: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] request body: %s\n", string(bodyBytes))
+	}
+
+	respBody, err := c.doRequest("POST", "/api/v2/error-tracking/issues/search", nil, bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, err
 	}
 
 	var resp SearchIssuesResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
+	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("parsing response: %w", err)
 	}
 
@@ -131,7 +178,7 @@ func (c *Client) SearchLogs(queryStr, since string) ([]LogEntry, error) {
 	query.Set("filter[query]", queryStr)
 	query.Set("filter[from]", since)
 
-	body, err := c.do("GET", "/api/v2/logs/events", query)
+	body, err := c.doRequest("GET", "/api/v2/logs/events", query, nil)
 	if err != nil {
 		return nil, err
 	}

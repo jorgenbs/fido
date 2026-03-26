@@ -2,6 +2,7 @@ package datadog
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -9,11 +10,27 @@ import (
 
 func TestClient_SearchErrorIssues(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v2/error-tracking/issues" {
+		if r.URL.Path != "/api/v2/error-tracking/issues/search" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
 		}
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Error("missing or incorrect Authorization header")
+		}
+
+		// Verify request body
+		body, _ := io.ReadAll(r.Body)
+		var reqBody searchRequest
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			t.Errorf("failed to parse request body: %v", err)
+		}
+		if reqBody.Data.Type != "search_request" {
+			t.Errorf("expected type search_request, got %s", reqBody.Data.Type)
+		}
+		if reqBody.Data.Attributes.Query != "service:svc-a" {
+			t.Errorf("unexpected query: %s", reqBody.Data.Attributes.Query)
 		}
 
 		resp := SearchIssuesResponse{
