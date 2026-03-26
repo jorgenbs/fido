@@ -172,6 +172,10 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) TriggerIgnore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.reports.Exists(id) {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return
+	}
 	if err := h.reports.SetIgnored(id, true); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -181,6 +185,10 @@ func (h *Handlers) TriggerIgnore(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handlers) TriggerUnignore(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if !h.reports.Exists(id) {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return
+	}
 	if err := h.reports.SetIgnored(id, false); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
