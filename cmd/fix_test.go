@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ruter-as/fido/internal/config"
@@ -54,5 +55,52 @@ func TestFix_FailsWithoutInvestigation(t *testing.T) {
 	err := runFix("issue-1", "svc-a", cfg, mgr, nil)
 	if err == nil {
 		t.Error("expected error when no investigation.md exists")
+	}
+}
+
+func TestRunFixIterate_RequiresResolve(t *testing.T) {
+	reportsDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+
+	mgr.WriteError("issue-1", "**Service:** svc-a\nerror content")
+	mgr.WriteInvestigation("issue-1", "investigation content")
+	mgr.WriteFix("issue-1", "previous fix content")
+	// No resolve.json
+
+	cfg := &config.Config{
+		Agent: config.AgentConfig{Fix: "echo"},
+	}
+
+	err := runFixIterate("issue-1", "svc-a", cfg, mgr, nil)
+	if err == nil {
+		t.Error("expected error when resolve.json is missing")
+	}
+	if !strings.Contains(err.Error(), "resolve") {
+		t.Errorf("expected error to mention resolve, got: %v", err)
+	}
+}
+
+func TestRunFixIterate_RequiresPreviousFix(t *testing.T) {
+	reportsDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+
+	mgr.WriteError("issue-1", "**Service:** svc-a\nerror content")
+	mgr.WriteInvestigation("issue-1", "investigation content")
+	// No fix.md
+	mgr.WriteResolve("issue-1", &reports.ResolveData{
+		Branch: "fix/issue-1-foo",
+		MRURL:  "https://gitlab.com/org/repo/-/merge_requests/1",
+	})
+
+	cfg := &config.Config{
+		Agent: config.AgentConfig{Fix: "echo"},
+	}
+
+	err := runFixIterate("issue-1", "svc-a", cfg, mgr, nil)
+	if err == nil {
+		t.Error("expected error when no fix.md exists")
+	}
+	if !strings.Contains(err.Error(), "fix") {
+		t.Errorf("expected error to mention fix, got: %v", err)
 	}
 }
