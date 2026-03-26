@@ -27,6 +27,8 @@ func NewServer(mgr *reports.Manager, cfg *config.Config) *Server {
 		r.Get("/issues/{id}", h.GetIssue)
 		r.Post("/issues/{id}/investigate", h.TriggerInvestigate)
 		r.Post("/issues/{id}/fix", h.TriggerFix)
+		r.Post("/issues/{id}/ignore", h.TriggerIgnore)
+		r.Post("/issues/{id}/unignore", h.TriggerUnignore)
 		r.Get("/issues/{id}/progress", h.StreamProgress)
 		r.Post("/scan", h.TriggerScan)
 	})

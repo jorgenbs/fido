@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
@@ -103,6 +104,48 @@ func TestTriggerScanHandler(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if !scanCalled {
 		t.Error("expected scan function to be called")
+	}
+}
+
+func TestHandlers_TriggerIgnore(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
+
+	h := NewHandlers(mgr, &config.Config{})
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/issue-1/ignore", nil)
+	r = withURLParam(r, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.TriggerIgnore(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	meta, _ := mgr.ReadMetadata("issue-1")
+	if !meta.Ignored {
+		t.Error("expected ignored=true after TriggerIgnore")
+	}
+}
+
+func TestHandlers_TriggerUnignore(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a", Ignored: true})
+
+	h := NewHandlers(mgr, &config.Config{})
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/issue-1/unignore", nil)
+	r = withURLParam(r, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.TriggerUnignore(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	meta, _ := mgr.ReadMetadata("issue-1")
+	if meta.Ignored {
+		t.Error("expected ignored=false after TriggerUnignore")
 	}
 }
 

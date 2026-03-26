@@ -170,6 +170,24 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
+func (h *Handlers) TriggerIgnore(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.reports.SetIgnored(id, true); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
+}
+
+func (h *Handlers) TriggerUnignore(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.reports.SetIgnored(id, false); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "unignored"})
+}
+
 func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	w.Header().Set("Content-Type", "text/event-stream")
