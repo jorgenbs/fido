@@ -72,7 +72,6 @@ type errorReportData struct {
 	StackTrace string
 	Logs       []datadog.LogAttributes
 	DatadogURL string
-	Traces     []datadog.TraceRef
 	EventsURL  string
 	TracesURL  string
 }
@@ -113,19 +112,6 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			TracesURL:  tracesURL,
 		}
 
-		if issueCtx, err := ddClient.FetchIssueContext(issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen); err == nil {
-			data.Traces = issueCtx.Traces
-			if issueCtx.EventsURL != "" {
-				data.EventsURL = issueCtx.EventsURL
-			}
-			if issueCtx.TracesURL != "" {
-				data.TracesURL = issueCtx.TracesURL
-			}
-			if data.StackTrace == "" && issueCtx.StackTrace != "" {
-				data.StackTrace = issueCtx.StackTrace
-			}
-		}
-
 		var buf bytes.Buffer
 		if err := tmpl.Execute(&buf, data); err != nil {
 			return count, fmt.Errorf("rendering error report: %w", err)
@@ -137,6 +123,7 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 
 		meta := &reports.MetaData{
 			Title:            issue.Attributes.Title,
+			Message:          issue.Attributes.Message,
 			Service:          issue.Attributes.Service,
 			Env:              issue.Attributes.Env,
 			FirstSeen:        issue.Attributes.FirstSeen,
@@ -182,7 +169,7 @@ func loadErrorTemplate() (*template.Template, error) {
 {{.StackTrace}}
 ` + "```" + `
 {{else}}
-_No stack trace available_
+<!-- STACK_TRACE_PENDING -->
 {{end}}
 
 ## Surrounding Logs
@@ -194,12 +181,8 @@ _No stack trace available_
 {{else}}
 _No surrounding logs found_
 {{end}}
-{{if .Traces}}
-## Related Traces
+<!-- TRACES_PENDING -->
 
-{{range .Traces}}- [Trace {{.TraceID}}]({{.URL}})
-{{end}}
-{{end}}
 ## Links
 
 - [Datadog Issue]({{.DatadogURL}})

@@ -11,6 +11,7 @@ import (
 
 	"github.com/ruter-as/fido/internal/agent"
 	"github.com/ruter-as/fido/internal/config"
+	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +42,14 @@ var investigateCmd = &cobra.Command{
 				return fmt.Errorf("could not determine service — use --service flag")
 			}
 		}
-		return runInvestigate(issueID, service, cfg, mgr, nil)
+		var ddClient *datadog.Client
+		if cfg.Datadog.Token != "" {
+			if c, err := datadog.NewClient(cfg.Datadog.Token, cfg.Datadog.Site, cfg.Datadog.OrgSubdomain); err == nil {
+				c.SetVerbose(verbose)
+				ddClient = c
+			}
+		}
+		return runInvestigate(issueID, service, cfg, mgr, ddClient, nil)
 	},
 }
 
@@ -71,11 +79,62 @@ Write your analysis as markdown with these sections:
 - **Complexity**: Simple/Moderate/Complex
 `
 
-func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, progress io.Writer) error {
+func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client, progress io.Writer) error {
 	log.Printf("[investigate] %s: reading error report", issueID)
 	errorContent, err := mgr.ReadError(issueID)
 	if err != nil {
 		return fmt.Errorf("no error report for issue %s: %w", issueID, err)
+	}
+
+	needsContext := strings.Contains(errorContent, "<!-- TRACES_PENDING -->") || strings.Contains(errorContent, "<!-- STACK_TRACE_PENDING -->")
+	alreadyMissing := strings.Contains(errorContent, "_No stack trace available_")
+	if verbose {
+		log.Printf("[investigate] %s: needsContext=%v alreadyMissing=%v ddClient=%v", issueID, needsContext, alreadyMissing, ddClient != nil)
+	}
+	if needsContext || (verbose && alreadyMissing) {
+		tracesSection := ""
+		stackTraceSection := "_No stack trace available_"
+		if ddClient == nil {
+			log.Printf("[investigate] %s: skipping context fetch — no Datadog client (token missing?)", issueID)
+		} else {
+			meta, metaErr := mgr.ReadMetadata(issueID)
+			if metaErr != nil {
+				log.Printf("[investigate] %s: reading metadata failed (non-fatal): %v", issueID, metaErr)
+			} else {
+				if verbose {
+					log.Printf("[investigate] %s: fetching issue context for service=%q env=%q firstSeen=%q lastSeen=%q",
+						issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen)
+				} else {
+					log.Printf("[investigate] %s: fetching issue context (traces/stack trace)", issueID)
+				}
+				if issueCtx, err := ddClient.FetchIssueContext(meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
+					if len(issueCtx.Traces) > 0 {
+						var sb strings.Builder
+						sb.WriteString("## Related Traces\n\n")
+						for _, t := range issueCtx.Traces {
+							sb.WriteString(fmt.Sprintf("- [Trace %s](%s)\n", t.TraceID, t.URL))
+						}
+						tracesSection = sb.String()
+					}
+					if issueCtx.StackTrace != "" {
+						stackTraceSection = "```\n" + issueCtx.StackTrace + "\n```"
+					}
+					if verbose {
+						log.Printf("[investigate] %s: context fetch result: traces=%d stackTrace=%v",
+							issueID, len(issueCtx.Traces), issueCtx.StackTrace != "")
+					}
+				} else {
+					log.Printf("[investigate] %s: fetching issue context (non-fatal): %v", issueID, err)
+				}
+			}
+		}
+		if needsContext {
+			errorContent = strings.Replace(errorContent, "<!-- TRACES_PENDING -->", tracesSection, 1)
+			errorContent = strings.Replace(errorContent, "<!-- STACK_TRACE_PENDING -->", stackTraceSection, 1)
+			if err := mgr.WriteError(issueID, errorContent); err != nil {
+				log.Printf("[investigate] %s: updating error.md with context (non-fatal): %v", issueID, err)
+			}
+		}
 	}
 
 	log.Printf("[investigate] %s: resolving repo for service %q", issueID, service)

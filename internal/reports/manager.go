@@ -29,6 +29,7 @@ type ResolveData struct {
 
 type MetaData struct {
 	Title            string `json:"title"`
+	Message          string `json:"message,omitempty"`
 	Service          string `json:"service"`
 	Env              string `json:"env"`
 	FirstSeen        string `json:"first_seen"`

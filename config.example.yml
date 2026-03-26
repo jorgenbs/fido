@@ -3,7 +3,8 @@
 
 datadog:
   token: ""         # Datadog Personal Access Token (https://app.datadoghq.eu/personal-settings/personal-access-tokens)
-                    # Required scopes: error_tracking_issue_read, logs_read_data
+                    # Required scopes: error_tracking_read, apm_read
+                    # (apm_read is needed to fetch stack traces via the Spans API)
   site: "datadoghq.eu"   # Datadog site — NOT your org subdomain (e.g. use "datadoghq.eu", not "myorg.datadoghq.eu")
   services:         # Datadog service names to monitor
     - "my-service"
