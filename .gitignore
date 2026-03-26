@@ -3,3 +3,4 @@ web/dist/
 config.yml
 fido
 .claude/settings.local.json
+.worktrees/
