@@ -1,30 +1,10 @@
 package agent
 
 import (
-	"os"
 	"runtime"
 	"strings"
 	"testing"
 )
-
-func TestRunner_BuildPromptFile(t *testing.T) {
-	r := &Runner{}
-
-	content := "# Error\nSomething broke"
-	path, err := r.WritePromptFile("issue-123", content)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer os.Remove(path)
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("reading prompt file: %v", err)
-	}
-	if !strings.Contains(string(data), "Something broke") {
-		t.Error("prompt file should contain the content")
-	}
-}
 
 func TestRunner_Run(t *testing.T) {
 	repoDir := t.TempDir()
@@ -48,6 +28,28 @@ func TestRunner_Run_CommandFails(t *testing.T) {
 	}
 
 	_, err := r.Run("prompt", t.TempDir())
+	if err == nil {
+		t.Error("expected error for failing command")
+	}
+}
+
+func TestRunner_RunInteractive(t *testing.T) {
+	r := &Runner{
+		Command: "true",
+	}
+
+	err := r.RunInteractive("Hello from prompt", t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunner_RunInteractive_CommandFails(t *testing.T) {
+	r := &Runner{
+		Command: "false",
+	}
+
+	err := r.RunInteractive("prompt", t.TempDir())
 	if err == nil {
 		t.Error("expected error for failing command")
 	}

@@ -1,14 +1,13 @@
 package cmd
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
-func TestFix_ProducesFixReportAndResolve(t *testing.T) {
+func TestFix_LaunchesInteractiveAgentAndChecksOutput(t *testing.T) {
 	reportsDir := t.TempDir()
 	repoDir := t.TempDir()
 	mgr := reports.NewManager(reportsDir)
@@ -16,26 +15,28 @@ func TestFix_ProducesFixReportAndResolve(t *testing.T) {
 	mgr.WriteError("issue-1", "# Error\nNullPointerException")
 	mgr.WriteInvestigation("issue-1", "# Investigation\nRoot cause: missing null check")
 
+	// Pre-write fix.md and resolve.json to simulate the agent having run.
+	mgr.WriteFix("issue-1", "**Summary**: Added null check")
+	mgr.WriteResolve("issue-1", &reports.ResolveData{
+		Branch:         "fix/issue-1-null-check",
+		MRURL:          "https://gitlab.example.com/mr/1",
+		MRStatus:       "draft",
+		Service:        "svc-a",
+		DatadogIssueID: "issue-1",
+	})
+
 	cfg := &config.Config{
 		Repositories: map[string]config.RepoConfig{
 			"svc-a": {Local: repoDir},
 		},
 		Agent: config.AgentConfig{
-			Fix: "cat",
+			Fix: "true", // no-op; files already written above
 		},
 	}
 
 	err := runFix("issue-1", "svc-a", cfg, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
-	}
-
-	fix, err := mgr.ReadFix("issue-1")
-	if err != nil {
-		t.Fatalf("reading fix: %v", err)
-	}
-	if !strings.Contains(fix, "NullPointerException") {
-		t.Error("fix report should contain error context")
 	}
 
 	stage := mgr.Stage("issue-1")

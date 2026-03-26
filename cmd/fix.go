@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ruter-as/fido/internal/agent"
 	"github.com/ruter-as/fido/internal/config"
@@ -62,15 +61,12 @@ const fixPromptTemplate = `You are fixing a production error. Use the error repo
    - Title: fix(<service>): <short description>
    - Description: Include investigation summary and Datadog link
    - Draft: yes
-
-## Output Format
-
-Write a summary of what you did:
-- **Summary**: What was changed and why
-- **Files Changed**: List of modified files
-- **Branch**: The branch name
-- **MR URL**: The merge request URL (if created)
-- **Tests**: Any test results
+6. Write a summary to %s/fix.md with these sections:
+   - **Summary**: What was changed and why
+   - **Files Changed**: List of modified files
+   - **Tests**: Any test results
+7. Write %s/resolve.json with this exact JSON structure:
+   {"branch":"<branch-name>","mr_url":"<mr-url>","mr_status":"draft","service":"%s","datadog_issue_id":"%s","datadog_url":"%s","created_at":"<RFC3339 timestamp>"}
 `
 
 func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) error {
@@ -89,44 +85,29 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager) e
 		return err
 	}
 
-	prompt := fmt.Sprintf(fixPromptTemplate, errorContent, investigationContent, issueID)
+	home, _ := os.UserHomeDir()
+	issueReportsDir := filepath.Join(home, ".fido", "reports", issueID)
+	datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issueID)
+
+	prompt := fmt.Sprintf(fixPromptTemplate,
+		errorContent, investigationContent,
+		issueID,
+		issueReportsDir, issueReportsDir,
+		service, issueID, datadogURL,
+	)
 
 	runner := &agent.Runner{Command: cfg.Agent.Fix}
-	output, err := runner.Run(prompt, repoPath)
-	if err != nil {
+	if err := runner.RunInteractive(prompt, repoPath); err != nil {
 		return fmt.Errorf("agent failed: %w", err)
 	}
 
-	if err := mgr.WriteFix(issueID, output); err != nil {
-		return fmt.Errorf("writing fix report: %w", err)
+	if !mgr.Exists(issueID) || mgr.Stage(issueID) != reports.StageFixed {
+		fmt.Fprintf(os.Stderr, "Warning: fix.md or resolve.json was not written — the session may have exited early.\n")
+	} else {
+		fmt.Printf("Fix complete for %s\n", issueID)
 	}
 
-	resolve := &reports.ResolveData{
-		Branch:         parseField(output, "Branch"),
-		MRURL:          parseField(output, "MR URL"),
-		MRStatus:       "draft",
-		Service:        service,
-		DatadogIssueID: issueID,
-		DatadogURL:     fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issueID),
-	}
-	if err := mgr.WriteResolve(issueID, resolve); err != nil {
-		return fmt.Errorf("writing resolve data: %w", err)
-	}
-
-	fmt.Printf("Fix complete for %s\n", issueID)
 	return nil
-}
-
-// parseField extracts a value from agent output like "- **Branch:** fix/issue-123-desc"
-func parseField(content, field string) string {
-	for _, line := range strings.Split(content, "\n") {
-		trimmed := strings.TrimSpace(line)
-		prefix := "**" + field + ":**"
-		if idx := strings.Index(trimmed, prefix); idx != -1 {
-			return strings.TrimSpace(trimmed[idx+len(prefix):])
-		}
-	}
-	return ""
 }
 
 func init() {
