@@ -102,12 +102,16 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 				lines = append(lines, fmt.Sprintf("- [Trace %s](%s)", tr.TraceID, tr.URL))
 			}
 		}
-		lines = append(lines, "\n## Useful Links\n")
+		var linkLines []string
 		if issueCtx.EventsURL != "" {
-			lines = append(lines, fmt.Sprintf("- [Events Timeline](%s)", issueCtx.EventsURL))
+			linkLines = append(linkLines, fmt.Sprintf("- [Events Timeline](%s)", issueCtx.EventsURL))
 		}
 		if issueCtx.TracesURL != "" {
-			lines = append(lines, fmt.Sprintf("- [Trace Waterfall](%s)", issueCtx.TracesURL))
+			linkLines = append(linkLines, fmt.Sprintf("- [Trace Waterfall](%s)", issueCtx.TracesURL))
+		}
+		if len(linkLines) > 0 {
+			lines = append(lines, "\n## Useful Links\n")
+			lines = append(lines, linkLines...)
 		}
 		contextSection = strings.Join(lines, "\n")
 	}

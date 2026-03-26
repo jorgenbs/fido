@@ -55,14 +55,16 @@ func TestRunInvestigate_IncludesContextLinks(t *testing.T) {
 	mgr := reports.NewManager(reportsDir)
 
 	mgr.WriteError("issue-1", "# Error\nNullPointerException")
-	mgr.WriteMetadata("issue-1", &reports.MetaData{
+	if err := mgr.WriteMetadata("issue-1", &reports.MetaData{
 		Service:          "svc-a",
 		Env:              "production",
 		FirstSeen:        "2026-03-25T10:00:00Z",
 		LastSeen:         "2026-03-26T09:00:00Z",
 		DatadogEventsURL: "https://example.com/events",
 		DatadogTraceURL:  "https://example.com/traces",
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	cfg := &config.Config{
 		Repositories: map[string]config.RepoConfig{"svc-a": {Local: repoDir}},
@@ -77,5 +79,8 @@ func TestRunInvestigate_IncludesContextLinks(t *testing.T) {
 	inv, _ := mgr.ReadInvestigation("issue-1")
 	if !strings.Contains(inv, "https://example.com/events") {
 		t.Error("expected investigation prompt to contain events URL")
+	}
+	if !strings.Contains(inv, "https://example.com/traces") {
+		t.Error("expected investigation prompt to contain traces URL")
 	}
 }
