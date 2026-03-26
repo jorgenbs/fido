@@ -25,6 +25,7 @@ var serveCmd = &cobra.Command{
 			cfg.Datadog.Token,
 			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
 		)
+		ddClient.SetVerbose(verbose)
 
 		server := api.NewServer(mgr, cfg)
 		handlers := api.GetHandlers(server)

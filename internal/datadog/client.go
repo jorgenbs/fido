@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -13,6 +14,7 @@ import (
 type Client struct {
 	token   string
 	baseURL string
+	verbose bool
 	http    *http.Client
 }
 
@@ -60,10 +62,16 @@ func NewClient(token, baseURL string) *Client {
 	}
 }
 
+func (c *Client) SetVerbose(v bool) { c.verbose = v }
+
 func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
 	u := fmt.Sprintf("%s%s", c.baseURL, path)
 	if len(query) > 0 {
 		u += "?" + query.Encode()
+	}
+
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] %s %s\n", method, u)
 	}
 
 	req, err := http.NewRequest(method, u, nil)
@@ -82,6 +90,13 @@ func (c *Client) do(method, path string, query url.Values) ([]byte, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response: %w", err)
+	}
+
+	if c.verbose {
+		fmt.Fprintf(os.Stderr, "[datadog] %d %s (%d bytes)\n", resp.StatusCode, resp.Status, len(body))
+		if resp.StatusCode >= 400 {
+			fmt.Fprintf(os.Stderr, "[datadog] response: %s\n", string(body))
+		}
 	}
 
 	if resp.StatusCode >= 400 {

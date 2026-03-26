@@ -35,6 +35,7 @@ var daemonCmd = &cobra.Command{
 			cfg.Datadog.Token,
 			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
 		)
+		ddClient.SetVerbose(verbose)
 
 		scanFn := func() error {
 			count, err := runScan(cfg, ddClient, mgr)

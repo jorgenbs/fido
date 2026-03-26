@@ -12,6 +12,7 @@ import (
 
 var (
 	cfgFile string
+	verbose bool
 	cfg     *config.Config
 )
 
@@ -40,4 +41,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.fido/config.yml)")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (log HTTP requests)")
 }

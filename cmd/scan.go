@@ -25,6 +25,7 @@ var scanCmd = &cobra.Command{
 			cfg.Datadog.Token,
 			fmt.Sprintf("https://api.%s", cfg.Datadog.Site),
 		)
+		ddClient.SetVerbose(verbose)
 
 		services, _ := cmd.Flags().GetStringSlice("service")
 		if len(services) == 0 {
