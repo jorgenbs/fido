@@ -9,6 +9,8 @@ export interface IssueListItem {
   count: number;
   mr_url: string | null;
   ignored: boolean;
+  ci_status: string;
+  ci_url: string;
 }
 
 export interface ResolveData {
@@ -28,6 +30,8 @@ export interface IssueDetail {
   investigation: string | null;
   fix: string | null;
   resolve: ResolveData | null;
+  ci_status: string;
+  ci_url: string;
 }
 
 export async function listIssues(status?: string, showIgnored?: boolean): Promise<IssueListItem[]> {
@@ -52,9 +56,11 @@ export async function triggerInvestigate(id: string): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
-export async function triggerFix(id: string): Promise<void> {
+export async function triggerFix(id: string, iterate = false): Promise<void> {
   const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/fix`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ iterate }),
   });
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
