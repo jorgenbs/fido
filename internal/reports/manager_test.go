@@ -204,3 +204,75 @@ func TestManager_ReadResolve(t *testing.T) {
 		t.Errorf("mr_url mismatch: got %q", got.MRURL)
 	}
 }
+
+func TestManager_MetaData_CIStatus(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	meta := &MetaData{
+		Title:    "SomeError",
+		Service:  "svc-a",
+		CIStatus: "failed",
+		CIURL:    "https://gitlab.com/org/repo/-/pipelines/42",
+	}
+	if err := m.WriteMetadata("issue-1", meta); err != nil {
+		t.Fatalf("WriteMetadata: %v", err)
+	}
+	got, err := m.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if got.CIStatus != "failed" {
+		t.Errorf("CIStatus: got %q, want %q", got.CIStatus, "failed")
+	}
+	if got.CIURL != meta.CIURL {
+		t.Errorf("CIURL: got %q, want %q", got.CIURL, meta.CIURL)
+	}
+}
+
+func TestManager_ReadLatestFix_FirstIteration(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteFix("issue-1", "first fix content")
+
+	content, iter, err := m.ReadLatestFix("issue-1")
+	if err != nil {
+		t.Fatalf("ReadLatestFix: %v", err)
+	}
+	if iter != 1 {
+		t.Errorf("iter: got %d, want 1", iter)
+	}
+	if content != "first fix content" {
+		t.Errorf("content: got %q", content)
+	}
+}
+
+func TestManager_ReadLatestFix_SecondIteration(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteFix("issue-1", "first fix")
+	m.writeFile("issue-1", "fix-2.md", "second fix content")
+
+	content, iter, err := m.ReadLatestFix("issue-1")
+	if err != nil {
+		t.Fatalf("ReadLatestFix: %v", err)
+	}
+	if iter != 2 {
+		t.Errorf("iter: got %d, want 2", iter)
+	}
+	if content != "second fix content" {
+		t.Errorf("content: got %q", content)
+	}
+}
+
+func TestManager_ReadLatestFix_NoFix(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	_, _, err := m.ReadLatestFix("issue-1")
+	if err == nil {
+		t.Error("expected error when no fix exists")
+	}
+}
