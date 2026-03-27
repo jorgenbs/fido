@@ -76,21 +76,31 @@ When `issue.ci_status === 'running' || issue.ci_status === 'pending'`, the Resol
 
 ---
 
-## 5. CI Status Polling Endpoint
+## 5. MR Status Polling Endpoint
+
+A single endpoint that refreshes both CI pipeline status and MR merge status, so the UI can reflect the full lifecycle of a merge request without a full page reload.
 
 ### Backend
 
-New handler `RefreshCIStatus` on `GET /api/issues/{id}/ci-status`:
+New handler `RefreshMRStatus` on `GET /api/issues/{id}/mr-status`:
 
-1. Read `resolve.json` for the issue — if absent, return `{"ci_status": "", "ci_url": ""}` (200)
+1. Read `resolve.json` for the issue — if absent, return `{"ci_status": "", "ci_url": "", "mr_status": ""}` (200)
 2. Look up repo path via `cfg.Repositories[service]` (service from `meta.json`)
-3. Call `gitlab.FetchCIStatus(resolve.Branch, repoPath)`
-4. On success: update `meta.json` via `mgr.SetCIStatus(issueID, status, ciURL)` and return `{"ci_status": status, "ci_url": ciURL}`
-5. On error: return 200 with current `meta.json` values (don't fail the request)
+3. Call `gitlab.FetchCIStatus(resolve.Branch, repoPath)` — returns `(status, ciURL, err)`
+4. Call `gitlab.FetchMRStatus(resolve.Branch, repoPath)` — returns `(mrStatus, err)` using `glab mr view --branch <branch>`
+5. On success: update `meta.json` via `mgr.SetCIStatus(issueID, status, ciURL)` and update `resolve.json` via `mgr.SetMRStatus(issueID, mrStatus)`; return `{"ci_status": status, "ci_url": ciURL, "mr_status": mrStatus}`
+6. On any error: return 200 with current values from `meta.json` / `resolve.json` (don't fail the request)
 
-New `SetCIStatus(issueID, status, ciURL string) error` method on `Manager` (same read-modify-write pattern as `SetIgnored`).
+New `gitlab.FetchMRStatus(branch, repoPath string) (status string, err error)`:
+- Runs `glab mr view --branch <branch>` in `repoPath`
+- Parses the output for state keywords: `merged`, `opened`, `closed`
+- Returns `""` if no MR found (non-fatal)
 
-Register route in `server.go`: `r.Get("/api/issues/{id}/ci-status", handlers.RefreshCIStatus)`
+New `SetCIStatus(issueID, status, ciURL string) error` on `Manager` — read-modify-write on `meta.json` (same pattern as `SetIgnored`).
+
+New `SetMRStatus(issueID, mrStatus string) error` on `Manager` — read-modify-write on `resolve.json`. `ResolveData` already has the `MRStatus string` field.
+
+Register route in `server.go`: `r.Get("/api/issues/{id}/mr-status", handlers.RefreshMRStatus)`
 
 ### Frontend
 
@@ -99,14 +109,15 @@ In `IssueDetail.tsx`, add a polling effect:
 ```typescript
 useEffect(() => {
   if (!id || !issue?.resolve) return; // only poll when MR exists
-  const terminal = ['passed', 'failed', 'canceled'];
-  if (terminal.includes(issue.ci_status)) return; // stop when settled
+  const ciTerminal = ['passed', 'failed', 'canceled'];
+  const mrTerminal = ['merged', 'closed'];
+  if (ciTerminal.includes(issue.ci_status) && mrTerminal.includes(issue.resolve.mr_status)) return;
 
   const interval = setInterval(async () => {
-    const res = await fetch(`${API_BASE}/api/issues/${id}/ci-status`);
+    const res = await fetch(`${API_BASE}/api/issues/${id}/mr-status`);
     if (!res.ok) return;
     const data = await res.json();
-    if (data.ci_status !== issue.ci_status) {
+    if (data.ci_status !== issue.ci_status || data.mr_status !== issue.resolve?.mr_status) {
       fetchIssue(); // full refresh on change
     }
   }, 30_000);
@@ -115,7 +126,9 @@ useEffect(() => {
 }, [id, issue?.resolve, issue?.ci_status]);
 ```
 
-Polling runs every 30 seconds. Stops automatically when CI reaches a terminal state or the MR disappears.
+Polling runs every 30 seconds. Stops when both CI is terminal AND MR is merged/closed.
+
+The `IssueDetail` API response already includes `resolve.mr_status` via the existing `resolve` field on `IssueDetail`.
 
 ---
 
