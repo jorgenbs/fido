@@ -41,8 +41,51 @@ export function IssueDetail() {
     }
   };
 
+  const startSSE = (onComplete: () => void, onError?: () => void) => {
+    if (!id) return;
+    sseRef.current?.close();
+    setProgressLog('');
+    sseRef.current = subscribeProgress(id, (data) => {
+      if (data.log) {
+        setProgressLog((prev) => prev + data.log);
+      }
+      if (data.status === 'complete') {
+        sseRef.current?.close();
+        setProgressLog('');
+        onComplete();
+      } else if (data.status === 'error') {
+        sseRef.current?.close();
+        setErrorMsg(data.message ?? 'Unknown error');
+        onError?.();
+      } else if (data.status === 'idle') {
+        sseRef.current?.close();
+        setProgressLog('');
+        setInvestigateState('idle');
+        setFixState('idle');
+        fetchIssue();
+      }
+    });
+  };
+
   useEffect(() => {
-    fetchIssue();
+    if (!id) return;
+    setLoading(true);
+    getIssue(id)
+      .then((data) => {
+        setIssue(data);
+        setLoading(false);
+        if (data.running_op === 'investigate') {
+          setInvestigateState('running');
+          startSSE(() => { setInvestigateState('idle'); fetchIssue(); }, () => setInvestigateState('error'));
+        } else if (data.running_op === 'fix') {
+          setFixState('running');
+          startSSE(() => { setFixState('idle'); fetchIssue(); }, () => setFixState('error'));
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch issue:', err);
+        setLoading(false);
+      });
     return () => {
       sseRef.current?.close();
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
@@ -76,32 +119,6 @@ export function IssueDetail() {
     return () => clearInterval(interval);
   }, [id, issue?.ci_status, issue?.resolve?.mr_status]);
 
-  const startSSE = (onComplete: () => void) => {
-    if (!id) return;
-    sseRef.current?.close();
-    setProgressLog('');
-    sseRef.current = subscribeProgress(id, (data) => {
-      if (data.log) {
-        setProgressLog((prev) => prev + data.log);
-      }
-      if (data.status === 'complete') {
-        sseRef.current?.close();
-        setProgressLog('');
-        onComplete();
-      } else if (data.status === 'error') {
-        sseRef.current?.close();
-        setErrorMsg(data.message ?? 'Unknown error');
-        setInvestigateState('error');
-        setFixState('idle');
-      } else if (data.status === 'idle') {
-        sseRef.current?.close();
-        setInvestigateState('idle');
-        setFixState('idle');
-        fetchIssue();
-      }
-    });
-  };
-
   const handleInvestigate = async () => {
     if (!id) return;
     setErrorMsg(null);
@@ -111,7 +128,7 @@ export function IssueDetail() {
       startSSE(() => {
         setInvestigateState('idle');
         fetchIssue();
-      });
+      }, () => setInvestigateState('error'));
     } catch (err) {
       setInvestigateState('error');
       setErrorMsg(String(err));
@@ -127,7 +144,7 @@ export function IssueDetail() {
       startSSE(() => {
         setFixState('idle');
         fetchIssue();
-      });
+      }, () => setFixState('error'));
     } catch (err) {
       setFixState('error');
       setErrorMsg(String(err));
@@ -143,7 +160,7 @@ export function IssueDetail() {
       startSSE(() => {
         setFixState('idle');
         fetchIssue();
-      });
+      }, () => setFixState('error'));
     } catch (err) {
       setFixState('error');
       setErrorMsg(String(err));
