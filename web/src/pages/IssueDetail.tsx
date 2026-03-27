@@ -25,6 +25,7 @@ export function IssueDetail() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
   const sseRef = useRef<EventSource | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copied, setCopied] = useState(false);
 
   const fetchIssue = async () => {
@@ -42,7 +43,10 @@ export function IssueDetail() {
 
   useEffect(() => {
     fetchIssue();
-    return () => sseRef.current?.close();
+    return () => {
+      sseRef.current?.close();
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
   }, [id]);
 
   useEffect(() => {
@@ -64,13 +68,13 @@ export function IssueDetail() {
         ) {
           fetchIssue();
         }
-      } catch (_e) {
+      } catch {
         // non-fatal: polling errors are ignored
       }
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [id, issue?.resolve, issue?.ci_status]);
+  }, [id, issue?.ci_status, issue?.resolve?.mr_status]);
 
   const startSSE = (onComplete: () => void) => {
     if (!id) return;
@@ -234,7 +238,8 @@ export function IssueDetail() {
                   onClick={() => {
                     navigator.clipboard.writeText(`fido fix ${issue.id}`);
                     setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
+                    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+                    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
                   }}
                   className="text-xs text-muted-foreground hover:text-foreground shrink-0"
                 >
