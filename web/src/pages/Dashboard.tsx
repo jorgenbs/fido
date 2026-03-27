@@ -9,6 +9,7 @@ import {
 } from '../api/client';
 import { StageIndicator } from '../components/StageIndicator';
 import { CIStatusBadge } from '../components/CIStatusBadge';
+import { InvestigationBadge } from '../components/InvestigationBadge';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -114,22 +115,26 @@ export function Dashboard() {
       ) : (
         <div>
           {/* Header row */}
-          <div className="grid grid-cols-[2.5fr_1fr_1fr_0.8fr_0.8fr_60px] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
+          <div className="grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
+            <span />
             <span>Issue</span>
             <span>Service</span>
             <span>Stage</span>
+            <span>Confidence</span>
+            <span>Complexity</span>
+            <span>Fixable</span>
             <span>CI</span>
             <span>MR</span>
-            <span />
           </div>
 
           {issues.map((issue) => (
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className="grid grid-cols-[2.5fr_1fr_1fr_0.8fr_0.8fr_60px] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors"
+                className="grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors"
                 onClick={() => toggleRow(issue.id)}
               >
+                <span />
                 <span className="font-medium text-sm truncate pr-2">
                   {issue.title || issue.id}
                   {issue.message && (
@@ -146,11 +151,18 @@ export function Dashboard() {
                   <StageIndicator stage={issue.stage} />
                 </span>
                 <span>
-                  {issue.mr_url ? (
-                    <CIStatusBadge status={issue.ci_status} url={issue.ci_url || undefined} />
-                  ) : (
-                    <span className="text-muted-foreground text-xs">—</span>
-                  )}
+                  <InvestigationBadge type="confidence" value={issue.confidence} />
+                </span>
+                <span>
+                  <InvestigationBadge type="complexity" value={issue.complexity} />
+                </span>
+                <span>
+                  {issue.code_fixable === 'Yes' && <span className="text-green-400 text-sm">✓</span>}
+                  {issue.code_fixable === 'No' && <span className="text-red-400 text-sm">✗</span>}
+                  {!issue.code_fixable && <span className="text-muted-foreground text-xs">—</span>}
+                </span>
+                <span>
+                  <CIStatusBadge status={issue.ci_status} url={issue.ci_url || undefined} />
                 </span>
                 <span>
                   {issue.mr_url ? (
@@ -167,7 +179,6 @@ export function Dashboard() {
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
                 </span>
-                <span className="text-muted-foreground text-center text-sm">···</span>
               </div>
 
               {/* Expanded row */}
