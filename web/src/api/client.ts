@@ -12,6 +12,9 @@ export interface IssueListItem {
   ignored: boolean;
   ci_status: string;
   ci_url: string;
+  confidence: string;
+  complexity: string;
+  code_fixable: string;
 }
 
 export interface ResolveData {
