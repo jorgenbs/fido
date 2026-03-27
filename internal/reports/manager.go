@@ -41,6 +41,9 @@ type MetaData struct {
 	Ignored          bool   `json:"ignored"`
 	CIStatus         string `json:"ci_status,omitempty"`
 	CIURL            string `json:"ci_url,omitempty"`
+	Confidence       string `json:"confidence,omitempty"`
+	Complexity       string `json:"complexity,omitempty"`
+	CodeFixable      string `json:"code_fixable,omitempty"`
 }
 
 type IssueSummary struct {
@@ -176,6 +179,17 @@ func (m *Manager) SetIgnored(issueID string, ignored bool) error {
 		return fmt.Errorf("reading metadata: %w", err)
 	}
 	meta.Ignored = ignored
+	return m.WriteMetadata(issueID, meta)
+}
+
+func (m *Manager) SetInvestigationTags(issueID, confidence, complexity, codeFixable string) error {
+	meta, err := m.ReadMetadata(issueID)
+	if err != nil {
+		return fmt.Errorf("reading metadata: %w", err)
+	}
+	meta.Confidence = confidence
+	meta.Complexity = complexity
+	meta.CodeFixable = codeFixable
 	return m.WriteMetadata(issueID, meta)
 }
 

@@ -276,3 +276,48 @@ func TestManager_ReadLatestFix_NoFix(t *testing.T) {
 		t.Error("expected error when no fix exists")
 	}
 }
+
+func TestManager_SetInvestigationTags(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a"})
+
+	if err := m.SetInvestigationTags("issue-1", "High", "Simple", "Yes"); err != nil {
+		t.Fatalf("SetInvestigationTags: %v", err)
+	}
+
+	meta, err := m.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if meta.Confidence != "High" {
+		t.Errorf("Confidence: got %q, want %q", meta.Confidence, "High")
+	}
+	if meta.Complexity != "Simple" {
+		t.Errorf("Complexity: got %q, want %q", meta.Complexity, "Simple")
+	}
+	if meta.CodeFixable != "Yes" {
+		t.Errorf("CodeFixable: got %q, want %q", meta.CodeFixable, "Yes")
+	}
+}
+
+func TestManager_SetInvestigationTags_PreservesOtherFields(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-b", Ignored: true, CIStatus: "passed"})
+
+	m.SetInvestigationTags("issue-1", "Medium", "Moderate", "No")
+
+	meta, _ := m.ReadMetadata("issue-1")
+	if meta.Service != "svc-b" {
+		t.Errorf("Service mutated: got %q", meta.Service)
+	}
+	if !meta.Ignored {
+		t.Error("Ignored flag was reset")
+	}
+	if meta.CIStatus != "passed" {
+		t.Errorf("CIStatus mutated: got %q", meta.CIStatus)
+	}
+}
