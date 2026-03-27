@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -76,8 +77,10 @@ type mrViewJSON struct {
 func FetchMRStatus(branch, repoPath string) (mrStatus, ciStatus, ciURL string, err error) {
 	cmd := exec.Command("glab", "mr", "view", branch, "--output", "json")
 	cmd.Dir = repoPath
-	out, execErr := cmd.CombinedOutput()
-	output := string(out)
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
+	execErr := cmd.Run()
+	output := stdout.String()
 
 	if execErr != nil && len(strings.TrimSpace(output)) == 0 {
 		return "", "", "", fmt.Errorf("glab mr view: %w", execErr)
