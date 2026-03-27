@@ -155,7 +155,7 @@ export function IssueDetail() {
 
         {/* Error Report */}
         <Section title="Error Report">
-          <MarkdownViewer title="" content={issue.error} />
+          <MarkdownViewer content={issue.error} />
         </Section>
 
         {/* Investigation */}
@@ -165,7 +165,7 @@ export function IssueDetail() {
           runningLabel="Claude is analysing the codebase…"
         >
           {issue.investigation ? (
-            <MarkdownViewer title="" content={issue.investigation} />
+            <MarkdownViewer content={issue.investigation} />
           ) : investigateState === 'running' ? (
             progressLog ? (
               <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
@@ -189,7 +189,7 @@ export function IssueDetail() {
           disabled={!issue.investigation && fixState !== 'running'}
         >
           {issue.fix ? (
-            <MarkdownViewer title="" content={issue.fix} />
+            <MarkdownViewer content={issue.fix} />
           ) : fixState === 'running' ? (
             progressLog ? (
               <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
