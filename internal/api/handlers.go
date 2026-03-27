@@ -18,20 +18,21 @@ import (
 )
 
 type IssueListItem struct {
-	ID       string  `json:"id"`
-	Stage    string  `json:"stage"`
-	Title    string  `json:"title,omitempty"`
-	Message  string  `json:"message,omitempty"`
-	Service  string  `json:"service,omitempty"`
-	LastSeen string  `json:"last_seen,omitempty"`
-	Count    int64   `json:"count,omitempty"`
-	MRURL    *string `json:"mr_url"`
-	Ignored  bool    `json:"ignored"`
-	CIStatus    string `json:"ci_status,omitempty"`
-	CIURL       string `json:"ci_url,omitempty"`
-	Confidence  string `json:"confidence,omitempty"`
-	Complexity  string `json:"complexity,omitempty"`
-	CodeFixable string `json:"code_fixable,omitempty"`
+	ID          string  `json:"id"`
+	Stage       string  `json:"stage"`
+	Title       string  `json:"title,omitempty"`
+	Message     string  `json:"message,omitempty"`
+	Service     string  `json:"service,omitempty"`
+	LastSeen    string  `json:"last_seen,omitempty"`
+	Count       int64   `json:"count,omitempty"`
+	MRURL       *string `json:"mr_url"`
+	Ignored     bool    `json:"ignored"`
+	CIStatus    string  `json:"ci_status,omitempty"`
+	CIURL       string  `json:"ci_url,omitempty"`
+	Confidence  string  `json:"confidence,omitempty"`
+	Complexity  string  `json:"complexity,omitempty"`
+	CodeFixable string  `json:"code_fixable,omitempty"`
+	RunningOp   string  `json:"running_op,omitempty"`
 }
 
 type IssueDetail struct {
@@ -43,6 +44,7 @@ type IssueDetail struct {
 	Resolve       *reports.ResolveData `json:"resolve"`
 	CIStatus      string               `json:"ci_status,omitempty"`
 	CIURL         string               `json:"ci_url,omitempty"`
+	RunningOp     string               `json:"running_op,omitempty"`
 }
 
 type ScanFunc func() error
@@ -120,6 +122,9 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 		if issue.MRURL != "" {
 			item.MRURL = &issue.MRURL
 		}
+		if op, ok := h.running.Load(issue.ID); ok {
+			item.RunningOp = op.(string)
+		}
 		items = append(items, item)
 	}
 
@@ -154,6 +159,9 @@ func (h *Handlers) GetIssue(w http.ResponseWriter, r *http.Request) {
 		detail.CIStatus = meta.CIStatus
 		detail.CIURL = meta.CIURL
 	}
+	if op, ok := h.running.Load(id); ok {
+		detail.RunningOp = op.(string)
+	}
 
 	writeJSON(w, http.StatusOK, detail)
 }
@@ -173,7 +181,7 @@ func (h *Handlers) TriggerInvestigate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "issue not found")
 		return
 	}
-	if _, loaded := h.running.LoadOrStore(id, true); loaded {
+	if _, loaded := h.running.LoadOrStore(id, "investigate"); loaded {
 		writeError(w, http.StatusConflict, "action already running for this issue")
 		return
 	}
@@ -200,7 +208,7 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "issue not found")
 		return
 	}
-	if _, loaded := h.running.LoadOrStore(id, true); loaded {
+	if _, loaded := h.running.LoadOrStore(id, "fix"); loaded {
 		writeError(w, http.StatusConflict, "action already running for this issue")
 		return
 	}

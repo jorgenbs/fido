@@ -352,3 +352,61 @@ func TestRefreshMRStatus_ReturnsStoredValuesWhenNoConfig(t *testing.T) {
 		t.Errorf("mr_status: got %q, want merged", resp["mr_status"])
 	}
 }
+
+func TestGetIssue_RunningOpWhenInvestigating(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	h := NewHandlers(mgr, nil)
+	h.running.Store("issue-1", "investigate")
+
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1", nil)
+	w := httptest.NewRecorder()
+	h.GetIssue(w, withURLParam(r, "id", "issue-1"))
+
+	var resp IssueDetail
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.RunningOp != "investigate" {
+		t.Errorf("RunningOp: got %q, want investigate", resp.RunningOp)
+	}
+}
+
+func TestGetIssue_RunningOpEmptyWhenIdle(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	h := NewHandlers(mgr, nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1", nil)
+	w := httptest.NewRecorder()
+	h.GetIssue(w, withURLParam(r, "id", "issue-1"))
+
+	var resp IssueDetail
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.RunningOp != "" {
+		t.Errorf("RunningOp: got %q, want empty", resp.RunningOp)
+	}
+}
+
+func TestListIssues_RunningOpIncluded(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	h := NewHandlers(mgr, nil)
+	h.running.Store("issue-1", "fix")
+
+	r := httptest.NewRequest(http.MethodGet, "/api/issues", nil)
+	w := httptest.NewRecorder()
+	h.ListIssues(w, r)
+
+	var resp []IssueListItem
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(resp))
+	}
+	if resp[0].RunningOp != "fix" {
+		t.Errorf("RunningOp: got %q, want fix", resp[0].RunningOp)
+	}
+}
