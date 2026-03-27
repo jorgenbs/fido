@@ -15,6 +15,23 @@ Go backend + React/TypeScript frontend (Vite, shadcn/ui, Tailwind).
 - `cd web && npm run dev` — start frontend dev server (port 5174)
 - `docker compose up` — full stack (API :8080, daemon, web :3000)
 
+## Backend verification
+
+- Be diligent of gitlab cli and datadog api usage - run a test before accepting the code.
+- After implementing or changing any API endpoint, verify it against the **running server** with curl. Build the binary, restart the server, then curl the affected endpoint with a real issue ID and confirm the response contains the expected data — not just empty/stored values.
+
+```bash
+# Rebuild and restart
+go build -o fido . && kill $(pgrep -f './fido serve') ; ./fido serve &
+
+# Curl the endpoint (use a real issue ID from ~/.fido/reports/)
+curl -s localhost:8080/api/issues/<id>/mr-status
+curl -s localhost:8080/api/issues/<id>
+curl -s localhost:8080/api/issues
+```
+
+Passing unit tests and TypeScript compilation are not sufficient — they do not catch integration issues like wrong CLI flags, stderr pollution, or config path mismatches.
+
 ## Frontend verification
 
 Before committing frontend changes, verify with Playwright headless browser:
