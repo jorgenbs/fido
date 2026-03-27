@@ -15,6 +15,7 @@ export interface IssueListItem {
   confidence: string;
   complexity: string;
   code_fixable: string;
+  running_op?: 'investigate' | 'fix';
 }
 
 export interface ResolveData {
@@ -36,6 +37,7 @@ export interface IssueDetail {
   resolve: ResolveData | null;
   ci_status: string;
   ci_url: string;
+  running_op?: 'investigate' | 'fix';
 }
 
 export async function listIssues(status?: string, showIgnored?: boolean): Promise<IssueListItem[]> {

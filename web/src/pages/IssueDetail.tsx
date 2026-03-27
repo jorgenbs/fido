@@ -93,6 +93,11 @@ export function IssueDetail() {
         setErrorMsg(data.message ?? 'Unknown error');
         setInvestigateState('error');
         setFixState('idle');
+      } else if (data.status === 'idle') {
+        sseRef.current?.close();
+        setInvestigateState('idle');
+        setFixState('idle');
+        fetchIssue();
       }
     });
   };
