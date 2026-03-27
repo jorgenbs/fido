@@ -22,6 +22,10 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [serviceFilter, setServiceFilter] = useState('all');
+  const [confidenceFilter, setConfidenceFilter] = useState('all');
+  const [complexityFilter, setComplexityFilter] = useState('all');
+  const [codeFixableOnly, setCodeFixableOnly] = useState(false);
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -74,14 +78,24 @@ export function Dashboard() {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const allSelected = issues.length > 0 && issues.every(i => selectedIds.has(i.id));
+  const services = [...new Set(issues.map(i => i.service).filter(Boolean))].sort();
+
+  const filteredIssues = issues.filter(issue => {
+    if (serviceFilter !== 'all' && issue.service !== serviceFilter) return false;
+    if (confidenceFilter !== 'all' && issue.confidence.toLowerCase() !== confidenceFilter.toLowerCase()) return false;
+    if (complexityFilter !== 'all' && issue.complexity.toLowerCase() !== complexityFilter.toLowerCase()) return false;
+    if (codeFixableOnly && issue.code_fixable !== 'Yes') return false;
+    return true;
+  });
+
+  const allSelected = filteredIssues.length > 0 && filteredIssues.every(i => selectedIds.has(i.id));
   const someSelected = selectedIds.size > 0;
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(issues.map(i => i.id)));
+      setSelectedIds(new Set(filteredIssues.map(i => i.id)));
     }
   };
 
@@ -112,7 +126,9 @@ export function Dashboard() {
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">Issues</span>
           <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">
-            {issues.length}
+            {filteredIssues.length === issues.length
+              ? issues.length
+              : `${filteredIssues.length} / ${issues.length}`}
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -127,6 +143,49 @@ export function Dashboard() {
               <SelectItem value="fixed">Fixed</SelectItem>
             </SelectContent>
           </Select>
+          {services.length > 0 && (
+            <Select value={serviceFilter} onValueChange={setServiceFilter}>
+              <SelectTrigger className="w-36 h-7 text-xs">
+                <SelectValue placeholder="All services" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All services</SelectItem>
+                {services.map(svc => (
+                  <SelectItem key={svc} value={svc}>{svc}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={confidenceFilter} onValueChange={setConfidenceFilter}>
+            <SelectTrigger className="w-36 h-7 text-xs">
+              <SelectValue placeholder="All confidence" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All confidence</SelectItem>
+              <SelectItem value="High">High</SelectItem>
+              <SelectItem value="Medium">Medium</SelectItem>
+              <SelectItem value="Low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={complexityFilter} onValueChange={setComplexityFilter}>
+            <SelectTrigger className="w-36 h-7 text-xs">
+              <SelectValue placeholder="All complexity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All complexity</SelectItem>
+              <SelectItem value="Simple">Simple</SelectItem>
+              <SelectItem value="Moderate">Moderate</SelectItem>
+              <SelectItem value="Complex">Complex</SelectItem>
+            </SelectContent>
+          </Select>
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <Checkbox
+              checked={codeFixableOnly}
+              onCheckedChange={(v) => setCodeFixableOnly(!!v)}
+              className="w-3.5 h-3.5"
+            />
+            Code fixable only
+          </label>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
             <Checkbox
               checked={showIgnored}
@@ -164,6 +223,8 @@ export function Dashboard() {
         <p className="p-4 text-sm text-muted-foreground">Loading…</p>
       ) : issues.length === 0 ? (
         <p className="p-4 text-sm text-muted-foreground">No issues found. Run a scan to get started.</p>
+      ) : filteredIssues.length === 0 ? (
+        <p className="p-4 text-sm text-muted-foreground">No issues match the current filters.</p>
       ) : (
         <div>
           {/* Header row */}
@@ -186,7 +247,7 @@ export function Dashboard() {
             <span>MR</span>
           </div>
 
-          {issues.map((issue) => (
+          {filteredIssues.map((issue) => (
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
