@@ -274,7 +274,14 @@ export function Dashboard() {
                 </span>
                 <span className="text-xs text-muted-foreground">{issue.service}</span>
                 <span>
-                  <StageIndicator stage={issue.stage} />
+                  {issue.running_op ? (
+                    <span className="inline-flex items-center gap-1 text-blue-400 text-xs font-medium">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                      {issue.running_op === 'investigate' ? 'Investigating…' : 'Fixing…'}
+                    </span>
+                  ) : (
+                    <StageIndicator stage={issue.stage} />
+                  )}
                 </span>
                 <span>
                   <InvestigationBadge type="confidence" value={issue.confidence} />
