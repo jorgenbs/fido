@@ -237,6 +237,39 @@ func TestListIssues_IncludesCIStatus(t *testing.T) {
 	}
 }
 
+func TestListIssuesHandler_IncludesInvestigationTags(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service:     "svc-a",
+		Confidence:  "High",
+		Complexity:  "Simple",
+		CodeFixable: "Yes",
+	})
+
+	h := NewHandlers(mgr, nil)
+	req := httptest.NewRequest("GET", "/api/issues", nil)
+	w := httptest.NewRecorder()
+
+	h.ListIssues(w, req)
+
+	var resp []IssueListItem
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(resp))
+	}
+	if resp[0].Confidence != "High" {
+		t.Errorf("Confidence: got %q, want High", resp[0].Confidence)
+	}
+	if resp[0].Complexity != "Simple" {
+		t.Errorf("Complexity: got %q, want Simple", resp[0].Complexity)
+	}
+	if resp[0].CodeFixable != "Yes" {
+		t.Errorf("CodeFixable: got %q, want Yes", resp[0].CodeFixable)
+	}
+}
+
 func TestTriggerInvestigateHandler(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)

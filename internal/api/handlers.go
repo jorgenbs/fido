@@ -26,8 +26,11 @@ type IssueListItem struct {
 	Count    int64   `json:"count,omitempty"`
 	MRURL    *string `json:"mr_url"`
 	Ignored  bool    `json:"ignored"`
-	CIStatus string  `json:"ci_status,omitempty"`
-	CIURL    string  `json:"ci_url,omitempty"`
+	CIStatus    string `json:"ci_status,omitempty"`
+	CIURL       string `json:"ci_url,omitempty"`
+	Confidence  string `json:"confidence,omitempty"`
+	Complexity  string `json:"complexity,omitempty"`
+	CodeFixable string `json:"code_fixable,omitempty"`
 }
 
 type IssueDetail struct {
@@ -107,8 +110,11 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 			item.LastSeen = issue.Meta.LastSeen
 			item.Count    = issue.Meta.Count
 			item.Ignored  = issue.Meta.Ignored
-			item.CIStatus = issue.Meta.CIStatus
-			item.CIURL    = issue.Meta.CIURL
+			item.CIStatus    = issue.Meta.CIStatus
+			item.CIURL       = issue.Meta.CIURL
+			item.Confidence  = issue.Meta.Confidence
+			item.Complexity  = issue.Meta.Complexity
+			item.CodeFixable = issue.Meta.CodeFixable
 		}
 		if issue.MRURL != "" {
 			item.MRURL = &issue.MRURL
