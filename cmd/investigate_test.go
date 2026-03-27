@@ -80,8 +80,8 @@ No code changes required.
 func TestParseInvestigationTags_CaseInsensitive(t *testing.T) {
 	content := "## confidence: medium\n## COMPLEXITY: Complex\n## Code Fixable: Yes\n"
 	conf, comp, fix := parseInvestigationTags(content)
-	if conf != "medium" {
-		t.Errorf("confidence: got %q, want %q", conf, "medium")
+	if conf != "Medium" {
+		t.Errorf("confidence: got %q, want %q", conf, "Medium")
 	}
 	if comp != "Complex" {
 		t.Errorf("complexity: got %q, want %q", comp, "Complex")
