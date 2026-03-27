@@ -295,3 +295,60 @@ func TestTriggerInvestigateHandler(t *testing.T) {
 		t.Errorf("expected investigate for issue-1, got %q", investigateCalled)
 	}
 }
+
+func TestRefreshMRStatus_NoResolve(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	h := NewHandlers(mgr, nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1/mr-status", nil)
+	r = withURLParam(r, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.RefreshMRStatus(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", w.Code)
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["ci_status"] != "" || resp["mr_status"] != "" {
+		t.Errorf("expected empty statuses, got ci_status=%q mr_status=%q", resp["ci_status"], resp["mr_status"])
+	}
+}
+
+func TestRefreshMRStatus_ReturnsStoredValuesWhenNoConfig(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service:  "svc-a",
+		CIStatus: "passed",
+		CIURL:    "https://gitlab.com/org/repo/-/pipelines/1",
+	})
+	mgr.WriteResolve("issue-1", &reports.ResolveData{
+		Branch:   "fix/issue-1",
+		MRURL:    "https://gitlab.com/mr/1",
+		MRStatus: "merged",
+	})
+
+	h := NewHandlers(mgr, nil) // nil config — no glab calls
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1/mr-status", nil)
+	r = withURLParam(r, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.RefreshMRStatus(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: got %d, want 200", w.Code)
+	}
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["ci_status"] != "passed" {
+		t.Errorf("ci_status: got %q, want passed", resp["ci_status"])
+	}
+	if resp["mr_status"] != "merged" {
+		t.Errorf("mr_status: got %q, want merged", resp["mr_status"])
+	}
+}

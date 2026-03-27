@@ -102,3 +102,9 @@ export function subscribeProgress(
   };
   return es;
 }
+
+export async function fetchMRStatus(id: string): Promise<{ ci_status: string; ci_url: string; mr_status: string }> {
+  const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/mr-status`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}

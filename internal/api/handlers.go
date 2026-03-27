@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ruter-as/fido/internal/config"
+	"github.com/ruter-as/fido/internal/gitlab"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
@@ -250,6 +251,54 @@ func (h *Handlers) TriggerUnignore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unignored"})
+}
+
+func (h *Handlers) RefreshMRStatus(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	resolve, err := h.reports.ReadResolve(id)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"ci_status": "",
+			"ci_url":    "",
+			"mr_status": "",
+		})
+		return
+	}
+
+	meta, err := h.reports.ReadMetadata(id)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"ci_status": "",
+			"ci_url":    "",
+			"mr_status": resolve.MRStatus,
+		})
+		return
+	}
+
+	ciStatus := meta.CIStatus
+	ciURL := meta.CIURL
+	mrStatus := resolve.MRStatus
+
+	if h.config != nil && resolve.Branch != "" {
+		if repo, ok := h.config.Repositories[meta.Service]; ok && repo.Local != "" {
+			if status, url, fetchErr := gitlab.FetchCIStatus(resolve.Branch, repo.Local); fetchErr == nil {
+				ciStatus = status
+				ciURL = url
+				_ = h.reports.SetCIStatus(id, status, url)
+			}
+			if status, fetchErr := gitlab.FetchMRStatus(resolve.Branch, repo.Local); fetchErr == nil {
+				mrStatus = status
+				_ = h.reports.SetMRStatus(id, status)
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"ci_status": ciStatus,
+		"ci_url":    ciURL,
+		"mr_status": mrStatus,
+	})
 }
 
 func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {

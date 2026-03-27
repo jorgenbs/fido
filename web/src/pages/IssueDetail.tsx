@@ -5,6 +5,7 @@ import {
   triggerInvestigate,
   triggerFix,
   subscribeProgress,
+  fetchMRStatus,
   type IssueDetail as IssueDetailType,
 } from '../api/client';
 import { StageIndicator } from '../components/StageIndicator';
@@ -24,6 +25,8 @@ export function IssueDetail() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
   const sseRef = useRef<EventSource | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchIssue = async () => {
     if (!id) return;
@@ -40,8 +43,38 @@ export function IssueDetail() {
 
   useEffect(() => {
     fetchIssue();
-    return () => sseRef.current?.close();
+    return () => {
+      sseRef.current?.close();
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
   }, [id]);
+
+  useEffect(() => {
+    if (!id || !issue?.resolve) return;
+    const ciTerminal = ['passed', 'failed', 'canceled'];
+    const mrTerminal = ['merged', 'closed'];
+    if (
+      ciTerminal.includes(issue.ci_status) &&
+      mrTerminal.includes(issue.resolve.mr_status ?? '')
+    )
+      return;
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await fetchMRStatus(id);
+        if (
+          data.ci_status !== issue.ci_status ||
+          data.mr_status !== issue.resolve?.mr_status
+        ) {
+          fetchIssue();
+        }
+      } catch {
+        // non-fatal: polling errors are ignored
+      }
+    }, 30_000);
+
+    return () => clearInterval(interval);
+  }, [id, issue?.ci_status, issue?.resolve?.mr_status]);
 
   const startSSE = (onComplete: () => void) => {
     if (!id) return;
@@ -155,7 +188,7 @@ export function IssueDetail() {
 
         {/* Error Report */}
         <Section title="Error Report">
-          <MarkdownViewer title="" content={issue.error} />
+          <MarkdownViewer content={issue.error} />
         </Section>
 
         {/* Investigation */}
@@ -165,7 +198,7 @@ export function IssueDetail() {
           runningLabel="Claude is analysing the codebase…"
         >
           {issue.investigation ? (
-            <MarkdownViewer title="" content={issue.investigation} />
+            <MarkdownViewer content={issue.investigation} />
           ) : investigateState === 'running' ? (
             progressLog ? (
               <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
@@ -189,7 +222,7 @@ export function IssueDetail() {
           disabled={!issue.investigation && fixState !== 'running'}
         >
           {issue.fix ? (
-            <MarkdownViewer title="" content={issue.fix} />
+            <MarkdownViewer content={issue.fix} />
           ) : fixState === 'running' ? (
             progressLog ? (
               <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
@@ -197,17 +230,33 @@ export function IssueDetail() {
               </pre>
             ) : null
           ) : issue.investigation ? (
-            <div className="p-4">
-              <Button size="sm" onClick={handleFix}>
-                Fix this issue
-              </Button>
+            <div className="p-4 space-y-2">
+              <p className="text-xs text-muted-foreground">Run this command to fix the issue:</p>
+              <div className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2">
+                <code className="flex-1 text-xs font-mono text-foreground">fido fix {issue.id}</code>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`fido fix ${issue.id}`);
+                    setCopied(true);
+                    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+                    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
             </div>
           ) : null}
         </Section>
 
         {/* Resolution */}
         {issue.resolve && (
-          <Section title="Resolution">
+          <Section
+            title="Resolution"
+            running={issue.ci_status === 'running' || issue.ci_status === 'pending'}
+            runningLabel="CI pipeline running…"
+          >
             <div className="p-4 space-y-2 text-sm">
               <p><span className="text-muted-foreground">Branch:</span> <code className="text-xs">{issue.resolve.branch}</code></p>
               <p>
@@ -224,7 +273,7 @@ export function IssueDetail() {
                 </p>
               )}
               <p><span className="text-muted-foreground">Created:</span> {new Date(issue.resolve.created_at).toLocaleString()}</p>
-              {issue.ci_status === 'failed' && fixState !== 'running' && (
+              {issue.stage === 'fixed' && issue.ci_status === 'failed' && fixState !== 'running' && (
                 <div className="pt-2">
                   <Button size="sm" variant="outline" onClick={handleRefix} className="border-red-800 text-red-400 hover:bg-red-950/30">
                     Re-fix (CI failing)

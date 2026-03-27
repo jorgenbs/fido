@@ -321,3 +321,59 @@ func TestManager_SetInvestigationTags_PreservesOtherFields(t *testing.T) {
 		t.Errorf("CIStatus mutated: got %q", meta.CIStatus)
 	}
 }
+
+func TestManager_SetCIStatus(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a"})
+
+	if err := m.SetCIStatus("issue-1", "failed", "https://gitlab.com/org/repo/-/pipelines/42"); err != nil {
+		t.Fatalf("SetCIStatus: %v", err)
+	}
+
+	meta, _ := m.ReadMetadata("issue-1")
+	if meta.CIStatus != "failed" {
+		t.Errorf("CIStatus: got %q, want failed", meta.CIStatus)
+	}
+	if meta.CIURL != "https://gitlab.com/org/repo/-/pipelines/42" {
+		t.Errorf("CIURL: got %q", meta.CIURL)
+	}
+}
+
+func TestManager_SetCIStatus_PreservesOtherFields(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a", Ignored: true, Confidence: "High"})
+
+	m.SetCIStatus("issue-1", "passed", "https://gitlab.com/pipelines/1")
+
+	meta, _ := m.ReadMetadata("issue-1")
+	if !meta.Ignored {
+		t.Error("Ignored flag was reset")
+	}
+	if meta.Confidence != "High" {
+		t.Errorf("Confidence mutated: got %q", meta.Confidence)
+	}
+}
+
+func TestManager_SetMRStatus(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteResolve("issue-1", &ResolveData{
+		Branch:   "fix/issue-1",
+		MRURL:    "https://gitlab.com/mr/1",
+		MRStatus: "opened",
+	})
+
+	if err := m.SetMRStatus("issue-1", "merged"); err != nil {
+		t.Fatalf("SetMRStatus: %v", err)
+	}
+
+	resolve, _ := m.ReadResolve("issue-1")
+	if resolve.MRStatus != "merged" {
+		t.Errorf("MRStatus: got %q, want merged", resolve.MRStatus)
+	}
+	if resolve.Branch != "fix/issue-1" {
+		t.Error("SetMRStatus should not change Branch field")
+	}
+}
