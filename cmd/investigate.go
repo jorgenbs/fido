@@ -76,9 +76,10 @@ Write your analysis as markdown with these sections:
 - **Root Cause**: What is causing this error
 - **Affected Files**: List of files involved
 - **Suggested Fix**: How to fix this
-- **Confidence**: High/Medium/Low
-- **Complexity**: Simple/Moderate/Complex
-- **Code Fixable**: Yes/No (is this a code defect that can be fixed with a code change?)
+
+## Confidence: High/Medium/Low
+## Complexity: Simple/Moderate/Complex
+## Code Fixable: Yes/No (is this a code defect that can be fixed with a code change?)
 `
 
 func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client, progress io.Writer) error {
