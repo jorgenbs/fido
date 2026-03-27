@@ -193,6 +193,25 @@ func (m *Manager) SetInvestigationTags(issueID, confidence, complexity, codeFixa
 	return m.WriteMetadata(issueID, meta)
 }
 
+func (m *Manager) SetCIStatus(issueID, status, ciURL string) error {
+	meta, err := m.ReadMetadata(issueID)
+	if err != nil {
+		return fmt.Errorf("reading metadata: %w", err)
+	}
+	meta.CIStatus = status
+	meta.CIURL = ciURL
+	return m.WriteMetadata(issueID, meta)
+}
+
+func (m *Manager) SetMRStatus(issueID, mrStatus string) error {
+	resolve, err := m.ReadResolve(issueID)
+	if err != nil {
+		return fmt.Errorf("reading resolve: %w", err)
+	}
+	resolve.MRStatus = mrStatus
+	return m.WriteResolve(issueID, resolve)
+}
+
 func (m *Manager) Stage(issueID string) Stage {
 	if !m.fileExists(issueID, "error.md") {
 		return StageUnknown
