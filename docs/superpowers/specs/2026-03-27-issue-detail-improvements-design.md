@@ -60,13 +60,19 @@ The Fix section only shows this when `issue.investigation` exists and `!issue.fi
 
 ---
 
-## 4. Re-fix Button Guard
+## 4. Re-fix Button Guard + CI Running Indicator
+
+**Re-fix guard:**
 
 Current condition: `issue.ci_status === 'failed' && fixState !== 'running'`
 
 New condition: `issue.stage === 'fixed' && issue.ci_status === 'failed' && fixState !== 'running'`
 
 The `stage` field is already present on `IssueDetail` from the API. No backend changes needed.
+
+**CI running indicator:**
+
+When `issue.ci_status === 'running' || issue.ci_status === 'pending'`, the Resolution `<Section>` header shows a pulsing dot with label "CI pipeline running…" — reusing the existing `running` and `runningLabel` props already supported by the `Section` component. The `CIStatusBadge` in the section body continues to show the yellow badge as before.
 
 ---
 
