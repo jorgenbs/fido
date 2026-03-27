@@ -56,3 +56,36 @@ func TestFetchCIStatus_GlabNotFound(t *testing.T) {
 		t.Error("expected error when glab not found")
 	}
 }
+
+func TestParseMRStatus(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"State: merged\nTitle: Fix auth bug", "merged"},
+		{"state:\tmerged", "merged"},
+		{"State: opened", "opened"},
+		{"State: closed", "closed"},
+		{"No state here", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		got := parseMRStatus(tt.input)
+		if got != tt.expected {
+			t.Errorf("parseMRStatus(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestFetchMRStatus_GlabNotFound(t *testing.T) {
+	if _, err := exec.LookPath("glab"); err == nil {
+		t.Skip("glab is installed; skipping not-found test")
+	}
+	dir := t.TempDir()
+	os.MkdirAll(dir+"/.git", 0755)
+
+	_, err := FetchMRStatus("main", dir)
+	if err == nil {
+		t.Error("expected error when glab not found")
+	}
+}

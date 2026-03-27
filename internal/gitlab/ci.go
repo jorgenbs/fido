@@ -60,3 +60,29 @@ func extractPipelineURL(output string) string {
 	}
 	return ""
 }
+
+// FetchMRStatus runs `glab mr view --branch <branch>` in repoPath and returns
+// the MR state ("merged", "opened", "closed", or ""). Returns ("", nil) if no MR found.
+func FetchMRStatus(branch, repoPath string) (status string, err error) {
+	cmd := exec.Command("glab", "mr", "view", "--branch", branch)
+	cmd.Dir = repoPath
+	out, execErr := cmd.CombinedOutput()
+	output := string(out)
+
+	if execErr != nil && len(strings.TrimSpace(output)) == 0 {
+		return "", fmt.Errorf("glab mr view: %w", execErr)
+	}
+
+	return parseMRStatus(output), nil
+}
+
+// parseMRStatus searches output for known GitLab MR state strings.
+func parseMRStatus(output string) string {
+	lower := strings.ToLower(output)
+	for _, s := range []string{"merged", "closed", "opened"} {
+		if strings.Contains(lower, s) {
+			return s
+		}
+	}
+	return ""
+}
