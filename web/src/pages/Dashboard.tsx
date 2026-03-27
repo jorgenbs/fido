@@ -21,12 +21,14 @@ export function Dashboard() {
   const [showIgnored, setShowIgnored] = useState(false);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
       const data = await listIssues(filter === 'all' ? undefined : filter, showIgnored);
       setIssues(data);
+      setSelectedIds(new Set());
     } catch (err) {
       console.error('Failed to fetch issues:', err);
     } finally {
@@ -56,8 +58,40 @@ export function Dashboard() {
     }
   };
 
+  const handleBulkIgnore = async () => {
+    const toIgnore = issues.filter(i => selectedIds.has(i.id) && !i.ignored);
+    await Promise.all(toIgnore.map(i => ignoreIssue(i.id)));
+    await fetchIssues();
+  };
+
+  const handleBulkUnignore = async () => {
+    const toUnignore = issues.filter(i => selectedIds.has(i.id) && i.ignored);
+    await Promise.all(toUnignore.map(i => unignoreIssue(i.id)));
+    await fetchIssues();
+  };
+
   const toggleRow = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
+  };
+
+  const allSelected = issues.length > 0 && issues.every(i => selectedIds.has(i.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(issues.map(i => i.id)));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -107,6 +141,24 @@ export function Dashboard() {
         </div>
       </div>
 
+      {someSelected && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-blue-950/30 border-b border-blue-900 text-xs">
+          <span className="text-blue-300 font-medium">{selectedIds.size} selected</span>
+          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkIgnore}>
+            Ignore
+          </Button>
+          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkUnignore}>
+            Unignore
+          </Button>
+          <button
+            className="ml-auto text-muted-foreground hover:text-foreground text-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Table */}
       {loading ? (
         <p className="p-4 text-sm text-muted-foreground">Loading…</p>
@@ -116,7 +168,14 @@ export function Dashboard() {
         <div>
           {/* Header row */}
           <div className="grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
-            <span />
+            <span>
+              <Checkbox
+                checked={allSelected}
+                onCheckedChange={toggleSelectAll}
+                className="w-3.5 h-3.5"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
+              />
+            </span>
             <span>Issue</span>
             <span>Service</span>
             <span>Stage</span>
@@ -131,10 +190,16 @@ export function Dashboard() {
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className="grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors"
+                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
-                <span />
+                <span onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.has(issue.id)}
+                    onCheckedChange={() => toggleSelectOne(issue.id)}
+                    className="w-3.5 h-3.5"
+                  />
+                </span>
                 <span className="font-medium text-sm truncate pr-2">
                   {issue.title || issue.id}
                   {issue.message && (
