@@ -284,6 +284,7 @@ export function Dashboard() {
                 </span>
                 <span>
                   {issue.code_fixable === 'Yes' && <span className="text-green-400 text-sm">✓</span>}
+                  {issue.code_fixable === 'Partially' && <span className="text-yellow-400 text-sm">~</span>}
                   {issue.code_fixable === 'No' && <span className="text-red-400 text-sm">✗</span>}
                   {!issue.code_fixable && <span className="text-muted-foreground text-xs">—</span>}
                 </span>

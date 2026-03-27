@@ -230,9 +230,8 @@ export function IssueDetail() {
               </pre>
             ) : null
           ) : issue.investigation ? (
-            <div className="p-4 space-y-2">
-              <p className="text-xs text-muted-foreground">Run this command to fix the issue:</p>
-              <div className="flex items-center gap-2 bg-muted/50 rounded px-3 py-2">
+            <div className="p-4">
+              <div className="flex items-center gap-2 bg-muted rounded px-3 py-2 border border-border">
                 <code className="flex-1 text-xs font-mono text-foreground">fido fix {issue.id}</code>
                 <button
                   onClick={() => {

@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -61,28 +62,59 @@ func extractPipelineURL(output string) string {
 	return ""
 }
 
-// FetchMRStatus runs `glab mr view --branch <branch>` in repoPath and returns
-// the MR state ("merged", "opened", "closed", or ""). Returns ("", nil) if no MR found.
-func FetchMRStatus(branch, repoPath string) (status string, err error) {
-	cmd := exec.Command("glab", "mr", "view", "--branch", branch)
+type mrViewJSON struct {
+	State    string `json:"state"`
+	Pipeline *struct {
+		Status string `json:"status"`
+		WebURL string `json:"web_url"`
+	} `json:"pipeline"`
+}
+
+// FetchMRStatus runs `glab mr view <branch> --output json` in repoPath and returns
+// the MR state ("merged", "opened", "closed"), CI status, and CI URL.
+// Returns ("", "", "", nil) if no MR found.
+func FetchMRStatus(branch, repoPath string) (mrStatus, ciStatus, ciURL string, err error) {
+	cmd := exec.Command("glab", "mr", "view", branch, "--output", "json")
 	cmd.Dir = repoPath
 	out, execErr := cmd.CombinedOutput()
 	output := string(out)
 
 	if execErr != nil && len(strings.TrimSpace(output)) == 0 {
-		return "", fmt.Errorf("glab mr view: %w", execErr)
+		return "", "", "", fmt.Errorf("glab mr view: %w", execErr)
 	}
 
-	return parseMRStatus(output), nil
+	mrStatus, ciStatus, ciURL = parseMRStatusJSON(output)
+	return mrStatus, ciStatus, ciURL, nil
 }
 
-// parseMRStatus searches output for known GitLab MR state strings.
-func parseMRStatus(output string) string {
-	lower := strings.ToLower(output)
-	for _, s := range []string{"merged", "closed", "opened"} {
-		if strings.Contains(lower, s) {
-			return s
-		}
+// parseMRStatusJSON parses JSON output from `glab mr view --output json`.
+func parseMRStatusJSON(output string) (mrStatus, ciStatus, ciURL string) {
+	var data mrViewJSON
+	if err := json.Unmarshal([]byte(output), &data); err != nil {
+		return "", "", ""
 	}
-	return ""
+	mrStatus = data.State
+	if data.Pipeline != nil {
+		ciStatus = normalizeCIStatus(data.Pipeline.Status)
+		ciURL = data.Pipeline.WebURL
+	}
+	return
+}
+
+// normalizeCIStatus maps GitLab pipeline status values to fido's internal status strings.
+func normalizeCIStatus(s string) string {
+	switch strings.ToLower(s) {
+	case "success":
+		return "passed"
+	case "failed":
+		return "failed"
+	case "running":
+		return "running"
+	case "pending":
+		return "pending"
+	case "canceled", "cancelled":
+		return "canceled"
+	default:
+		return s
+	}
 }

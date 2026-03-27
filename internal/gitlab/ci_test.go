@@ -57,22 +57,38 @@ func TestFetchCIStatus_GlabNotFound(t *testing.T) {
 	}
 }
 
-func TestParseMRStatus(t *testing.T) {
+func TestParseMRStatusJSON(t *testing.T) {
 	tests := []struct {
-		input    string
-		expected string
+		input      string
+		wantMR     string
+		wantCI     string
+		wantCIURL  string
 	}{
-		{"State: merged\nTitle: Fix auth bug", "merged"},
-		{"state:\tmerged", "merged"},
-		{"State: opened", "opened"},
-		{"State: closed", "closed"},
-		{"No state here", ""},
-		{"", ""},
+		{
+			`{"state":"merged","pipeline":{"status":"success","web_url":"https://gl.com/pipelines/1"}}`,
+			"merged", "passed", "https://gl.com/pipelines/1",
+		},
+		{
+			`{"state":"opened","pipeline":{"status":"running","web_url":""}}`,
+			"opened", "running", "",
+		},
+		{
+			`{"state":"closed"}`,
+			"closed", "", "",
+		},
+		{`{}`, "", "", ""},
+		{"invalid json", "", "", ""},
 	}
 	for _, tt := range tests {
-		got := parseMRStatus(tt.input)
-		if got != tt.expected {
-			t.Errorf("parseMRStatus(%q) = %q, want %q", tt.input, got, tt.expected)
+		mr, ci, ciURL := parseMRStatusJSON(tt.input)
+		if mr != tt.wantMR {
+			t.Errorf("parseMRStatusJSON mr=%q, want %q (input %q)", mr, tt.wantMR, tt.input)
+		}
+		if ci != tt.wantCI {
+			t.Errorf("parseMRStatusJSON ci=%q, want %q (input %q)", ci, tt.wantCI, tt.input)
+		}
+		if ciURL != tt.wantCIURL {
+			t.Errorf("parseMRStatusJSON ciURL=%q, want %q (input %q)", ciURL, tt.wantCIURL, tt.input)
 		}
 	}
 }
@@ -84,7 +100,7 @@ func TestFetchMRStatus_GlabNotFound(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(dir+"/.git", 0755)
 
-	_, err := FetchMRStatus("main", dir)
+	_, _, _, err := FetchMRStatus("main", dir)
 	if err == nil {
 		t.Error("expected error when glab not found")
 	}

@@ -282,14 +282,14 @@ func (h *Handlers) RefreshMRStatus(w http.ResponseWriter, r *http.Request) {
 
 	if h.config != nil && resolve.Branch != "" {
 		if repo, ok := h.config.Repositories[meta.Service]; ok && repo.Local != "" {
-			if status, url, fetchErr := gitlab.FetchCIStatus(resolve.Branch, repo.Local); fetchErr == nil {
-				ciStatus = status
-				ciURL = url
-				_ = h.reports.SetCIStatus(id, status, url)
-			}
-			if status, fetchErr := gitlab.FetchMRStatus(resolve.Branch, repo.Local); fetchErr == nil {
-				mrStatus = status
-				_ = h.reports.SetMRStatus(id, status)
+			if mr, ci, ciU, fetchErr := gitlab.FetchMRStatus(resolve.Branch, repo.Local); fetchErr == nil {
+				mrStatus = mr
+				_ = h.reports.SetMRStatus(id, mr)
+				if ci != "" {
+					ciStatus = ci
+					ciURL = ciU
+					_ = h.reports.SetCIStatus(id, ci, ciU)
+				}
 			}
 		}
 	}

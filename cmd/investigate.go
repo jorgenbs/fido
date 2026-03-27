@@ -174,14 +174,18 @@ func parseInvestigationTags(content string) (confidence, complexity, codeFixable
 		line = strings.TrimSpace(line)
 		lower := strings.ToLower(line)
 		if strings.HasPrefix(lower, "## confidence:") {
-			confidence = titleCase(firstWord(strings.TrimSpace(line[len("## confidence:"):])))
+			confidence = titleCase(stripMarkdown(firstWord(strings.TrimSpace(line[len("## confidence:"):]))))
 		} else if strings.HasPrefix(lower, "## complexity:") {
-			complexity = titleCase(firstWord(strings.TrimSpace(line[len("## complexity:"):])))
+			complexity = titleCase(stripMarkdown(firstWord(strings.TrimSpace(line[len("## complexity:"):]))))
 		} else if strings.HasPrefix(lower, "## code fixable:") {
-			codeFixable = titleCase(firstWord(strings.TrimSpace(line[len("## code fixable:"):])))
+			codeFixable = titleCase(stripMarkdown(firstWord(strings.TrimSpace(line[len("## code fixable:"):]))))
 		}
 	}
 	return
+}
+
+func stripMarkdown(s string) string {
+	return strings.Trim(s, "*_")
 }
 
 func titleCase(s string) string {

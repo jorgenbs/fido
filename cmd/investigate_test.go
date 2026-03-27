@@ -91,6 +91,28 @@ func TestParseInvestigationTags_CaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestParseInvestigationTags_AsteriskWrapped(t *testing.T) {
+	content := "## Confidence: **Medium**\n## Complexity: **Moderate**\n## Code Fixable: **Yes**\n"
+	conf, comp, fix := parseInvestigationTags(content)
+	if conf != "Medium" {
+		t.Errorf("confidence: got %q, want Medium", conf)
+	}
+	if comp != "Moderate" {
+		t.Errorf("complexity: got %q, want Moderate", comp)
+	}
+	if fix != "Yes" {
+		t.Errorf("codeFixable: got %q, want Yes", fix)
+	}
+}
+
+func TestParseInvestigationTags_Partially(t *testing.T) {
+	content := "## Code Fixable: Partially\n"
+	_, _, fix := parseInvestigationTags(content)
+	if fix != "Partially" {
+		t.Errorf("codeFixable: got %q, want Partially", fix)
+	}
+}
+
 func TestParseInvestigationTags_MissingTags(t *testing.T) {
 	content := "## Root Cause\nSome text only."
 	conf, comp, fix := parseInvestigationTags(content)
