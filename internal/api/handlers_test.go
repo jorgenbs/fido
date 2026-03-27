@@ -389,6 +389,49 @@ func TestGetIssue_RunningOpEmptyWhenIdle(t *testing.T) {
 	}
 }
 
+// flushRecorder wraps httptest.ResponseRecorder to satisfy http.Flusher.
+type flushRecorder struct {
+	*httptest.ResponseRecorder
+}
+
+func (f *flushRecorder) Flush() {}
+
+func TestStreamProgress_IdleWhenNothingRan(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error") // stage = scanned, no investigation
+
+	h := NewHandlers(mgr, nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1/progress", nil)
+	w := &flushRecorder{httptest.NewRecorder()}
+	h.StreamProgress(w, withURLParam(r, "id", "issue-1"))
+
+	body := w.Body.String()
+	if !strings.Contains(body, `"status":"idle"`) {
+		t.Errorf("expected idle status, got: %s", body)
+	}
+	if strings.Contains(body, `"status":"complete"`) {
+		t.Errorf("should not return complete for unstarted issue, got: %s", body)
+	}
+}
+
+func TestStreamProgress_CompleteWhenAlreadyInvestigated(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteInvestigation("issue-1", "root cause found") // stage = investigated
+
+	h := NewHandlers(mgr, nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/issues/issue-1/progress", nil)
+	w := &flushRecorder{httptest.NewRecorder()}
+	h.StreamProgress(w, withURLParam(r, "id", "issue-1"))
+
+	body := w.Body.String()
+	if !strings.Contains(body, `"status":"complete"`) {
+		t.Errorf("expected complete status, got: %s", body)
+	}
+}
+
 func TestListIssues_RunningOpIncluded(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)

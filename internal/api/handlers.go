@@ -351,8 +351,13 @@ func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, running := h.running.Load(id); !running {
-			drainLog() // flush remaining output before complete
-			fmt.Fprintf(w, "data: {\"status\":\"complete\"}\n\n")
+			drainLog()
+			stage := h.reports.Stage(id)
+			if stage == reports.StageInvestigated || stage == reports.StageFixed {
+				fmt.Fprintf(w, "data: {\"status\":\"complete\"}\n\n")
+			} else {
+				fmt.Fprintf(w, "data: {\"status\":\"idle\"}\n\n")
+			}
 			flusher.Flush()
 			return
 		}
