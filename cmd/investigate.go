@@ -68,6 +68,7 @@ const investigatePromptTemplate = `You are investigating a production error. Ana
 4. List all affected files and code paths
 5. Suggest a fix approach
 6. Estimate confidence and complexity
+7. Determine whether this is a code-fixable defect
 
 ## Output Format
 
@@ -77,6 +78,7 @@ Write your analysis as markdown with these sections:
 - **Suggested Fix**: How to fix this
 - **Confidence**: High/Medium/Low
 - **Complexity**: Simple/Moderate/Complex
+- **Code Fixable**: Yes/No (is this a code defect that can be fixed with a code change?)
 `
 
 func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Manager, ddClient *datadog.Client, progress io.Writer) error {
@@ -157,8 +159,36 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		return fmt.Errorf("writing investigation report: %w", err)
 	}
 
+	confidence, complexity, codeFixable := parseInvestigationTags(output)
+	if err := mgr.SetInvestigationTags(issueID, confidence, complexity, codeFixable); err != nil {
+		log.Printf("[investigate] %s: storing investigation tags (non-fatal): %v", issueID, err)
+	}
+
 	fmt.Printf("Investigation complete for %s\n", issueID)
 	return nil
+}
+
+func parseInvestigationTags(content string) (confidence, complexity, codeFixable string) {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "## confidence:") {
+			confidence = firstWord(strings.TrimSpace(line[len("## confidence:"):]))
+		} else if strings.HasPrefix(lower, "## complexity:") {
+			complexity = firstWord(strings.TrimSpace(line[len("## complexity:"):]))
+		} else if strings.HasPrefix(lower, "## code fixable:") {
+			codeFixable = firstWord(strings.TrimSpace(line[len("## code fixable:"):]))
+		}
+	}
+	return
+}
+
+func firstWord(s string) string {
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[0]
 }
 
 func resolveRepoPath(service string, cfg *config.Config) (string, error) {

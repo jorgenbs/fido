@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -46,6 +48,105 @@ func TestInvestigate_FailsWithoutErrorReport(t *testing.T) {
 	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
 	if err == nil {
 		t.Error("expected error when no error.md exists")
+	}
+}
+
+func TestParseInvestigationTags_AllPresent(t *testing.T) {
+	content := `## Root Cause
+Some analysis here.
+
+## Confidence: High
+
+The stack trace points precisely to the issue.
+
+## Complexity: Simple
+
+No code changes required.
+
+## Code Fixable: No
+`
+	conf, comp, fix := parseInvestigationTags(content)
+	if conf != "High" {
+		t.Errorf("confidence: got %q, want %q", conf, "High")
+	}
+	if comp != "Simple" {
+		t.Errorf("complexity: got %q, want %q", comp, "Simple")
+	}
+	if fix != "No" {
+		t.Errorf("codeFixable: got %q, want %q", fix, "No")
+	}
+}
+
+func TestParseInvestigationTags_CaseInsensitive(t *testing.T) {
+	content := "## confidence: medium\n## COMPLEXITY: Complex\n## Code Fixable: Yes\n"
+	conf, comp, fix := parseInvestigationTags(content)
+	if conf != "medium" {
+		t.Errorf("confidence: got %q, want %q", conf, "medium")
+	}
+	if comp != "Complex" {
+		t.Errorf("complexity: got %q, want %q", comp, "Complex")
+	}
+	if fix != "Yes" {
+		t.Errorf("codeFixable: got %q, want %q", fix, "Yes")
+	}
+}
+
+func TestParseInvestigationTags_MissingTags(t *testing.T) {
+	content := "## Root Cause\nSome text only."
+	conf, comp, fix := parseInvestigationTags(content)
+	if conf != "" {
+		t.Errorf("confidence: got %q, want empty", conf)
+	}
+	if comp != "" {
+		t.Errorf("complexity: got %q, want empty", comp)
+	}
+	if fix != "" {
+		t.Errorf("codeFixable: got %q, want empty", fix)
+	}
+}
+
+func TestInvestigate_ParsesAndStoresTags(t *testing.T) {
+	reportsDir := t.TempDir()
+	repoDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+
+	mgr.WriteError("issue-1", "# Error\nNullPointerException")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
+
+	cfg := &config.Config{
+		Repositories: map[string]config.RepoConfig{
+			"svc-a": {Local: repoDir},
+		},
+		Agent: config.AgentConfig{
+			Investigate: "bash -c",
+		},
+	}
+
+	// Override to use a mock that outputs structured tags
+	// We can't easily pass args with spaces through strings.Fields splitting,
+	// so use a wrapper script approach or use printf via shell.
+	// Instead, write a temp script file.
+	scriptFile := filepath.Join(t.TempDir(), "mock-agent.sh")
+	os.WriteFile(scriptFile, []byte("#!/bin/sh\nprintf '## Confidence: High\n## Complexity: Simple\n## Code Fixable: Yes\n'"), 0755)
+	cfg.Agent.Investigate = scriptFile
+
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	meta, err := mgr.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if meta.Confidence != "High" {
+		t.Errorf("Confidence: got %q, want High", meta.Confidence)
+	}
+	if meta.Complexity != "Simple" {
+		t.Errorf("Complexity: got %q, want Simple", meta.Complexity)
+	}
+	if meta.CodeFixable != "Yes" {
+		t.Errorf("CodeFixable: got %q, want Yes", meta.CodeFixable)
 	}
 }
 
