@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listIssues,
@@ -22,6 +22,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedRef = useRef<string | null>(null);
   const [serviceFilter, setServiceFilter] = useState('all');
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [complexityFilter, setComplexityFilter] = useState('all');
@@ -92,6 +93,7 @@ export function Dashboard() {
   const someSelected = selectedIds.size > 0;
 
   const toggleSelectAll = () => {
+    lastSelectedRef.current = null;
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
@@ -99,7 +101,25 @@ export function Dashboard() {
     }
   };
 
-  const toggleSelectOne = (id: string) => {
+  const toggleSelectOne = (id: string, e: React.MouseEvent) => {
+    const anchor = lastSelectedRef.current;
+    if (e.shiftKey && anchor && anchor !== id) {
+      const anchorIdx = filteredIssues.findIndex(i => i.id === anchor);
+      const clickIdx = filteredIssues.findIndex(i => i.id === id);
+      if (anchorIdx !== -1 && clickIdx !== -1) {
+        const [min, max] = anchorIdx < clickIdx
+          ? [anchorIdx, clickIdx]
+          : [clickIdx, anchorIdx];
+        setSelectedIds(prev => {
+          const next = new Set(prev);
+          filteredIssues.slice(min, max + 1).forEach(i => next.add(i.id));
+          return next;
+        });
+        return;
+      }
+    }
+    // Plain toggle
+    lastSelectedRef.current = id;
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -254,10 +274,15 @@ export function Dashboard() {
                 className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
-                <span onClick={(e) => e.stopPropagation()}>
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelectOne(issue.id, e);
+                  }}
+                >
                   <Checkbox
                     checked={selectedIds.has(issue.id)}
-                    onCheckedChange={() => toggleSelectOne(issue.id)}
+                    onCheckedChange={() => {}}
                     className="w-3.5 h-3.5"
                   />
                 </span>
