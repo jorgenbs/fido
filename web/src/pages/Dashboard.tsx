@@ -220,23 +220,27 @@ export function Dashboard() {
         </div>
       </div>
 
-      {someSelected && (
-        <div className="flex items-center gap-3 px-4 py-2 bg-blue-950/30 border-b border-blue-900 text-xs">
-          <span className="text-blue-300 font-medium">{selectedIds.size} selected</span>
-          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkIgnore}>
-            Ignore
-          </Button>
-          <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkUnignore}>
-            Unignore
-          </Button>
-          <button
-            className="ml-auto text-muted-foreground hover:text-foreground text-xs"
-            onClick={() => setSelectedIds(new Set())}
-          >
-            Clear selection
-          </button>
-        </div>
-      )}
+      <div className={`flex items-center gap-3 px-4 border-b text-xs h-8 ${someSelected ? "bg-blue-950/30 border-blue-900" : "border-transparent"}`}>
+        <span className={`font-medium ${someSelected ? "text-blue-300" : "invisible"}`}>
+          {someSelected ? `${selectedIds.size} selected` : "0 selected"}
+        </span>
+        {someSelected && (
+          <>
+            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkIgnore}>
+              Ignore
+            </Button>
+            <Button size="sm" variant="outline" className="h-6 text-xs" onClick={handleBulkUnignore}>
+              Unignore
+            </Button>
+            <button
+              className="ml-auto text-muted-foreground hover:text-foreground text-xs"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              Clear selection
+            </button>
+          </>
+        )}
+      </div>
 
       {/* Table */}
       {loading ? (
