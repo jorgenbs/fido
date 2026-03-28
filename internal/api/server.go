@@ -1,12 +1,15 @@
 package api
 
 import (
+	"io/fs"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/ruter-as/fido/internal/config"
 	"github.com/ruter-as/fido/internal/reports"
+	fidoweb "github.com/ruter-as/fido/web"
 )
 
 type Server struct {
@@ -35,6 +38,23 @@ func NewServer(mgr *reports.Manager, cfg *config.Config, hub *Hub) *Server {
 		r.Post("/scan", h.TriggerScan)
 		r.Get("/events", h.StreamEvents)
 	})
+
+	// Serve embedded frontend (SPA)
+	distFS, err := fs.Sub(fidoweb.Assets, "dist")
+	if err == nil {
+		fileServer := http.FileServer(http.FS(distFS))
+		r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
+			// Try to serve the file directly; if not found, serve index.html (SPA routing)
+			path := strings.TrimPrefix(r.URL.Path, "/")
+			if path == "" {
+				path = "index.html"
+			}
+			if _, err := fs.Stat(distFS, path); err != nil {
+				r.URL.Path = "/"
+			}
+			fileServer.ServeHTTP(w, r)
+		})
+	}
 
 	return &Server{handler: r, handlers: h}
 }

@@ -135,22 +135,6 @@ export function IssueDetail() {
     }
   };
 
-  const handleFix = async () => {
-    if (!id) return;
-    setErrorMsg(null);
-    setFixState('running');
-    try {
-      await triggerFix(id);
-      startSSE(() => {
-        setFixState('idle');
-        fetchIssue();
-      }, () => setFixState('error'));
-    } catch (err) {
-      setFixState('error');
-      setErrorMsg(String(err));
-    }
-  };
-
   const handleRefix = async () => {
     if (!id) return;
     setErrorMsg(null);
