@@ -84,22 +84,30 @@ var serveCmd = &cobra.Command{
 			return fmt.Errorf("invalid scan interval %q: %w", intervalStr, err)
 		}
 
+		// Run initial scan synchronously to validate config/credentials
+		fmt.Println("Running initial scan...")
+		count, err := runScan(cfg, ddClient, mgr)
+		if err != nil {
+			return fmt.Errorf("initial scan failed (check your Datadog token): %w", err)
+		}
+		fmt.Printf("Initial scan complete: %d new issues\n", count)
+		hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
+
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer cancel()
 
 		go func() {
 			fmt.Printf("Background scanner started (interval: %s)\n", interval)
-			scanFn := func() error {
-				count, scanErr := runScan(cfg, ddClient, mgr)
+			runDaemonLoop(ctx, interval, func() error {
+				c, scanErr := runScan(cfg, ddClient, mgr)
 				if scanErr != nil {
 					fmt.Printf("Background scan error: %v\n", scanErr)
 					return scanErr
 				}
-				fmt.Printf("Background scan complete: %d new issues\n", count)
-				hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
+				fmt.Printf("Background scan complete: %d new issues\n", c)
+				hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": c}})
 				return nil
-			}
-			runDaemonLoop(ctx, interval, scanFn)
+			})
 		}()
 
 		fmt.Printf("Fido server listening on :%s\n", port)
