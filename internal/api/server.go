@@ -32,6 +32,7 @@ func NewServer(mgr *reports.Manager, cfg *config.Config) *Server {
 		r.Get("/issues/{id}/progress", h.StreamProgress)
 		r.Get("/issues/{id}/mr-status", h.RefreshMRStatus)
 		r.Post("/scan", h.TriggerScan)
+		r.Get("/events", h.StreamEvents)
 	})
 
 	return &Server{handler: r, handlers: h}

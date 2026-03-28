@@ -72,6 +72,7 @@ func (p *progressBuf) ReadAll() string {
 type Handlers struct {
 	reports       *reports.Manager
 	config        *config.Config
+	hub           *Hub
 	scanFn        ScanFunc
 	investigateFn InvestigateFunc
 	fixFn         FixFunc
@@ -362,6 +363,32 @@ func (h *Handlers) StreamProgress(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func (h *Handlers) StreamEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	ch := h.hub.Subscribe()
+	defer h.hub.Unsubscribe(ch)
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case evt := <-ch:
+			data, _ := json.Marshal(evt)
+			fmt.Fprintf(w, "data: %s\n\n", data)
+			flusher.Flush()
+		}
 	}
 }
 

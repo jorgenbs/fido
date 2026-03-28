@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -429,6 +430,42 @@ func TestStreamProgress_CompleteWhenAlreadyInvestigated(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, `"status":"complete"`) {
 		t.Errorf("expected complete status, got: %s", body)
+	}
+}
+
+func TestStreamEvents_ReceivesPublishedEvent(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	hub := NewHub()
+	h := NewHandlers(mgr, nil)
+	h.hub = hub
+
+	// Start handler in a goroutine (it blocks on SSE)
+	r := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	ctx, cancel := context.WithCancel(r.Context())
+	r = r.WithContext(ctx)
+	w := &flushRecorder{httptest.NewRecorder()}
+
+	done := make(chan struct{})
+	go func() {
+		h.StreamEvents(w, r)
+		close(done)
+	}()
+
+	// Give the goroutine time to subscribe and enter the select loop
+	time.Sleep(50 * time.Millisecond)
+
+	// Publish an event
+	hub.Publish(Event{Type: "issue:updated", Payload: map[string]any{"id": "issue-1"}})
+
+	// Give it time to write
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := w.Body.String()
+	if !strings.Contains(body, `"type":"issue:updated"`) {
+		t.Errorf("expected event in body, got: %s", body)
 	}
 }
 
