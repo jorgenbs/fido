@@ -14,8 +14,9 @@ type Server struct {
 	handlers *Handlers
 }
 
-func NewServer(mgr *reports.Manager, cfg *config.Config) *Server {
+func NewServer(mgr *reports.Manager, cfg *config.Config, hub *Hub) *Server {
 	h := NewHandlers(mgr, cfg)
+	h.hub = hub
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)

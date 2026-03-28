@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"github.com/ruter-as/fido/internal/api"
 	"github.com/ruter-as/fido/internal/datadog"
@@ -32,7 +36,9 @@ var serveCmd = &cobra.Command{
 		}
 		ddClient.SetVerbose(verbose)
 
-		server := api.NewServer(mgr, cfg)
+		hub := api.NewHub()
+
+		server := api.NewServer(mgr, cfg, hub)
 		handlers := api.GetHandlers(server)
 		handlers.SetScanFunc(func() error {
 			count, err := runScan(cfg, ddClient, mgr)
@@ -68,8 +74,42 @@ var serveCmd = &cobra.Command{
 			return runFix(issueID, service, cfg, mgr, progress)
 		})
 
-		fmt.Printf("Fido API server listening on :%s\n", port)
-		return http.ListenAndServe(":"+port, server)
+		// Start daemon scanner in background
+		intervalStr := cfg.Scan.Interval
+		if intervalStr == "" {
+			intervalStr = "15m"
+		}
+		interval, err := time.ParseDuration(intervalStr)
+		if err != nil {
+			return fmt.Errorf("invalid scan interval %q: %w", intervalStr, err)
+		}
+
+		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer cancel()
+
+		go func() {
+			fmt.Printf("Background scanner started (interval: %s)\n", interval)
+			scanFn := func() error {
+				count, scanErr := runScan(cfg, ddClient, mgr)
+				if scanErr != nil {
+					fmt.Printf("Background scan error: %v\n", scanErr)
+					return scanErr
+				}
+				fmt.Printf("Background scan complete: %d new issues\n", count)
+				hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
+				return nil
+			}
+			runDaemonLoop(ctx, interval, scanFn)
+		}()
+
+		fmt.Printf("Fido server listening on :%s\n", port)
+
+		srv := &http.Server{Addr: ":" + port, Handler: server}
+		go func() {
+			<-ctx.Done()
+			srv.Shutdown(context.Background())
+		}()
+		return srv.ListenAndServe()
 	},
 }
 
