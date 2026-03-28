@@ -84,6 +84,12 @@ func NewHandlers(mgr *reports.Manager, cfg *config.Config) *Handlers {
 	return &Handlers{reports: mgr, config: cfg}
 }
 
+func (h *Handlers) publish(evt Event) {
+	if h.hub != nil {
+		h.hub.Publish(evt)
+	}
+}
+
 func (h *Handlers) SetScanFunc(fn ScanFunc)              { h.scanFn = fn }
 func (h *Handlers) SetInvestigateFunc(fn InvestigateFunc) { h.investigateFn = fn }
 func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
@@ -172,7 +178,10 @@ func (h *Handlers) TriggerScan(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "scan not configured")
 		return
 	}
-	go h.scanFn()
+	go func() {
+		h.scanFn()
+		h.publish(Event{Type: "scan:complete", Payload: map[string]any{}})
+	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
@@ -195,10 +204,15 @@ func (h *Handlers) TriggerInvestigate(w http.ResponseWriter, r *http.Request) {
 	h.progressBufs.Store(id, pbuf)
 	go func() {
 		defer h.running.Delete(id)
+		h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "investigate", "status": "started"}})
 		if err := h.investigateFn(id, pbuf); err != nil {
 			log.Printf("investigate %s failed: %v", id, err)
 			h.running.Store(id+"_error", err.Error())
+			h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "investigate", "status": "error"}})
+			return
 		}
+		h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "investigate", "status": "complete"}})
+		h.publish(Event{Type: "issue:updated", Payload: map[string]any{"id": id, "field": "stage", "newValue": "investigated"}})
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -228,10 +242,15 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 	h.progressBufs.Store(id, pbuf)
 	go func() {
 		defer h.running.Delete(id)
+		h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "fix", "status": "started"}})
 		if err := h.fixFn(id, req.Iterate, pbuf); err != nil {
 			log.Printf("fix %s failed: %v", id, err)
 			h.running.Store(id+"_error", err.Error())
+			h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "fix", "status": "error"}})
+			return
 		}
+		h.publish(Event{Type: "issue:progress", Payload: map[string]any{"id": id, "action": "fix", "status": "complete"}})
+		h.publish(Event{Type: "issue:updated", Payload: map[string]any{"id": id, "field": "stage", "newValue": "fixed"}})
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
@@ -246,6 +265,7 @@ func (h *Handlers) TriggerIgnore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.publish(Event{Type: "issue:updated", Payload: map[string]any{"id": id, "field": "ignored", "newValue": true}})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 }
 
@@ -259,6 +279,7 @@ func (h *Handlers) TriggerUnignore(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	h.publish(Event{Type: "issue:updated", Payload: map[string]any{"id": id, "field": "ignored", "newValue": false}})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "unignored"})
 }
 

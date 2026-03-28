@@ -469,6 +469,104 @@ func TestStreamEvents_ReceivesPublishedEvent(t *testing.T) {
 	}
 }
 
+func TestTriggerIgnore_PublishesEvent(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
+
+	hub := NewHub()
+	ch := hub.Subscribe()
+	defer hub.Unsubscribe(ch)
+
+	h := NewHandlers(mgr, nil)
+	h.hub = hub
+
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/issue-1/ignore", nil)
+	r = withURLParam(r, "id", "issue-1")
+	w := httptest.NewRecorder()
+	h.TriggerIgnore(w, r)
+
+	select {
+	case evt := <-ch:
+		if evt.Type != "issue:updated" {
+			t.Errorf("Type: got %q, want issue:updated", evt.Type)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("no event published")
+	}
+}
+
+func TestTriggerScan_PublishesEvent(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	hub := NewHub()
+	ch := hub.Subscribe()
+	defer hub.Unsubscribe(ch)
+
+	h := NewHandlers(mgr, nil)
+	h.hub = hub
+	h.SetScanFunc(func() error { return nil })
+
+	r := httptest.NewRequest(http.MethodPost, "/api/scan", nil)
+	w := httptest.NewRecorder()
+	h.TriggerScan(w, r)
+
+	select {
+	case evt := <-ch:
+		if evt.Type != "scan:complete" {
+			t.Errorf("Type: got %q, want scan:complete", evt.Type)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("no event published")
+	}
+}
+
+func TestTriggerInvestigate_PublishesProgressEvents(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "error")
+
+	hub := NewHub()
+	ch := hub.Subscribe()
+	defer hub.Unsubscribe(ch)
+
+	h := NewHandlers(mgr, nil)
+	h.hub = hub
+	h.SetInvestigateFunc(func(id string, w io.Writer) error {
+		return nil
+	})
+
+	r := httptest.NewRequest(http.MethodPost, "/api/issues/issue-1/investigate", nil)
+	w := httptest.NewRecorder()
+	h.TriggerInvestigate(w, withURLParam(r, "id", "issue-1"))
+
+	var events []Event
+	timeout := time.After(500 * time.Millisecond)
+	for {
+		select {
+		case evt := <-ch:
+			events = append(events, evt)
+			if evt.Type == "issue:progress" {
+				p := evt.Payload.(map[string]any)
+				if p["status"] == "complete" {
+					goto done
+				}
+			}
+		case <-timeout:
+			goto done
+		}
+	}
+done:
+	if len(events) < 2 {
+		t.Fatalf("expected at least 2 events (started + complete), got %d", len(events))
+	}
+	if events[0].Type != "issue:progress" {
+		t.Errorf("first event: got %q, want issue:progress", events[0].Type)
+	}
+}
+
 func TestListIssues_RunningOpIncluded(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)
