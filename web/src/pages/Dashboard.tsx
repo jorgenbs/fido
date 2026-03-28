@@ -4,6 +4,8 @@ import {
   listIssues,
   getIssue,
   triggerScan,
+  triggerInvestigate as apiInvestigate,
+  triggerFix as apiFix,
   ignoreIssue,
   unignoreIssue,
   type IssueListItem,
@@ -33,6 +35,7 @@ export function Dashboard() {
   const [complexityFilter, setComplexityFilter] = useState('all');
   const [codeFixableOnly, setCodeFixableOnly] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
+  const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
 
   const { permission, requestPermission, notify } = useNotifications();
   const [bannerDismissed, setBannerDismissed] = useState(() =>
@@ -138,6 +141,36 @@ export function Dashboard() {
       await fetchIssues();
     } catch (err) {
       console.error('Failed to toggle ignore:', err);
+    }
+  };
+
+  const handleInvestigate = async (id: string) => {
+    setActionLoading(prev => ({ ...prev, [id]: 'investigate' }));
+    try {
+      await apiInvestigate(id);
+    } catch (err) {
+      console.error('Failed to trigger investigate:', err);
+    } finally {
+      setActionLoading(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  };
+
+  const handleFix = async (id: string) => {
+    setActionLoading(prev => ({ ...prev, [id]: 'fix' }));
+    try {
+      await apiFix(id);
+    } catch (err) {
+      console.error('Failed to trigger fix:', err);
+    } finally {
+      setActionLoading(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -428,8 +461,19 @@ export function Dashboard() {
 
               {/* Expanded row */}
               {expandedId === issue.id && (
-                <div className="border-l-2 border-blue-500 bg-blue-950/20 px-4 py-3">
+                <div className="border-l-2 border-blue-500 bg-blue-950/20 px-4 py-3 space-y-3">
+                  {/* Metadata row */}
                   <div className="flex flex-wrap gap-4 items-center text-xs">
+                    {issue.service && (
+                      <span className="text-muted-foreground">
+                        Service <strong className="text-foreground">{issue.service}</strong>
+                      </span>
+                    )}
+                    {issue.env && (
+                      <span className="text-muted-foreground">
+                        Env <strong className="text-foreground">{issue.env}</strong>
+                      </span>
+                    )}
                     {issue.last_seen && (
                       <span className="text-muted-foreground">
                         Last seen <strong className="text-foreground">{new Date(issue.last_seen).toLocaleString()}</strong>
@@ -440,46 +484,108 @@ export function Dashboard() {
                         Occurrences <strong className="text-foreground">{issue.count}</strong>
                       </span>
                     )}
+                    {issue.datadog_url && (
+                      <a
+                        href={issue.datadog_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-400 hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Datadog ↗
+                      </a>
+                    )}
                     <Link
                       to={`/issues/${issue.id}`}
                       className="text-blue-400 hover:underline"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      View full detail ↗
+                      Full detail ↗
                     </Link>
-                    <div className="flex gap-2 ml-auto">
-                      {issue.stage === 'scanned' && (
-                        <Link to={`/issues/${issue.id}`}>
-                          <Button size="sm" className="h-6 text-xs" onClick={(e) => e.stopPropagation()}>
-                            Investigate
-                          </Button>
-                        </Link>
-                      )}
-                      {issue.stage === 'investigated' && (
-                        <Link to={`/issues/${issue.id}`}>
-                          <Button size="sm" className="h-6 text-xs" onClick={(e) => e.stopPropagation()}>
-                            Fix
-                          </Button>
-                        </Link>
-                      )}
+                  </div>
+
+                  {/* Stack trace */}
+                  {issue.stack_trace && (
+                    <StackTracePreview trace={issue.stack_trace} />
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    {issue.stage === 'scanned' && !issue.running_op && (
                       <Button
                         size="sm"
-                        variant="outline"
                         className="h-6 text-xs"
+                        disabled={!!actionLoading[issue.id]}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleIgnore(issue.id, issue.ignored);
+                          handleInvestigate(issue.id);
                         }}
                       >
-                        {issue.ignored ? 'Unignore' : 'Ignore'}
+                        {actionLoading[issue.id] === 'investigate' ? 'Starting...' : 'Investigate'}
                       </Button>
-                    </div>
+                    )}
+                    {issue.stage === 'investigated' && !issue.running_op && (
+                      <Button
+                        size="sm"
+                        className="h-6 text-xs"
+                        disabled={!!actionLoading[issue.id]}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFix(issue.id);
+                        }}
+                      >
+                        {actionLoading[issue.id] === 'fix' ? 'Starting...' : 'Fix'}
+                      </Button>
+                    )}
+                    {issue.running_op && (
+                      <span className="inline-flex items-center gap-1 text-blue-400 text-xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                        {issue.running_op === 'investigate' ? 'Investigating...' : 'Fixing...'}
+                      </span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleIgnore(issue.id, issue.ignored);
+                      }}
+                    >
+                      {issue.ignored ? 'Unignore' : 'Ignore'}
+                    </Button>
                   </div>
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function StackTracePreview({ trace }: { trace: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = trace.split('\n');
+  const truncated = lines.length > 15;
+  const displayLines = expanded ? lines : lines.slice(0, 15);
+
+  return (
+    <div className="text-xs">
+      <pre className="p-3 bg-muted/30 rounded border border-border font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-80">
+        {displayLines.join('\n')}
+      </pre>
+      {truncated && (
+        <button
+          className="mt-1 text-blue-400 hover:underline text-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          }}
+        >
+          {expanded ? 'Show less' : `Show more (${lines.length - 15} more lines)`}
+        </button>
       )}
     </div>
   );

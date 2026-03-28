@@ -6,6 +6,7 @@ export interface IssueListItem {
   title: string;
   message: string;
   service: string;
+  env: string;
   last_seen: string;
   count: number;
   mr_url: string | null;
@@ -16,6 +17,8 @@ export interface IssueListItem {
   complexity: string;
   code_fixable: string;
   running_op?: 'investigate' | 'fix';
+  datadog_url: string;
+  stack_trace: string;
 }
 
 export interface ResolveData {
