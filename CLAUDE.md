@@ -10,10 +10,10 @@ Go backend + React/TypeScript frontend (Vite, shadcn/ui, Tailwind).
 
 ## Commands
 
-- `go build -o fido .` — build
+- `go build -o fido .` — build (requires `cd web && npm run build` first for embedded frontend)
 - `go test ./...` — run tests
-- `cd web && npm run dev` — start frontend dev server (port 5174)
-- `docker compose up` — full stack (API :8080, daemon, web :3000)
+- `cd web && npm run dev` — start frontend dev server with API proxy (port 5174)
+- `./fido serve` — full stack: API + embedded frontend + background scanner (port 8080)
 
 ## Backend verification
 
