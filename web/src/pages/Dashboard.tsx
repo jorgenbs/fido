@@ -10,6 +10,8 @@ import {
   type SSEEvent,
 } from '../api/client';
 import { useEventStream } from '../hooks/useEventStream';
+import { useNotifications } from '../hooks/useNotifications';
+import { NotificationBanner } from '../components/NotificationBanner';
 import { StageIndicator } from '../components/StageIndicator';
 import { CIStatusBadge } from '../components/CIStatusBadge';
 import { InvestigationBadge } from '../components/InvestigationBadge';
@@ -32,6 +34,17 @@ export function Dashboard() {
   const [codeFixableOnly, setCodeFixableOnly] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
 
+  const { permission, requestPermission, notify } = useNotifications();
+  const [bannerDismissed, setBannerDismissed] = useState(() =>
+    localStorage.getItem('fido:notif-dismissed') === 'true'
+  );
+  const showBanner = permission === 'default' && !bannerDismissed;
+
+  const dismissBanner = () => {
+    setBannerDismissed(true);
+    localStorage.setItem('fido:notif-dismissed', 'true');
+  };
+
   const fetchIssues = useCallback(async () => {
     setLoading(true);
     try {
@@ -53,10 +66,17 @@ export function Dashboard() {
     const id = event.payload?.id as string | undefined;
 
     switch (event.type) {
-      case 'scan:complete':
+      case 'scan:complete': {
+        const count = event.payload?.count as number;
         fetchIssues();
+        if (count > 0) {
+          notify('New issues found', { body: `Scan discovered ${count} new issue${count === 1 ? '' : 's'}` });
+        }
         break;
-      case 'issue:updated':
+      }
+      case 'issue:updated': {
+        const field = event.payload?.field as string;
+        const newValue = event.payload?.newValue;
         if (id) {
           getIssue(id).then(() => fetchIssues()).catch(() => {});
           setHighlightedIds(prev => new Set(prev).add(id));
@@ -67,8 +87,19 @@ export function Dashboard() {
               return next;
             });
           }, 2000);
+
+          if (field === 'stage' && newValue === 'investigated') {
+            notify('Investigation complete', { body: `Issue ${id} has been investigated` });
+          } else if (field === 'stage' && newValue === 'fixed') {
+            notify('Fix applied', { body: `Issue ${id} has been fixed` });
+          } else if (field === 'ci_status' && newValue === 'passed') {
+            notify('CI passed', { body: `Issue ${id}: pipeline passed` });
+          } else if (field === 'ci_status' && newValue === 'failed') {
+            notify('CI failed', { body: `Issue ${id}: pipeline failed` });
+          }
         }
         break;
+      }
       case 'issue:progress':
         if (id) {
           setIssues(prev => prev.map(issue =>
@@ -187,6 +218,10 @@ export function Dashboard() {
           ☀ / 🌙
         </button>
       </div>
+
+      {showBanner && (
+        <NotificationBanner onAllow={requestPermission} onDismiss={dismissBanner} />
+      )}
 
       {/* Toolbar */}
       <div className="flex justify-between items-center px-4 py-3 border-b border-border">

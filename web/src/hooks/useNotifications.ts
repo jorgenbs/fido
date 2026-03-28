@@ -1,0 +1,27 @@
+import { useState, useCallback } from 'react';
+
+type Permission = 'default' | 'granted' | 'denied';
+
+export function useNotifications() {
+  const [permission, setPermission] = useState<Permission>(
+    typeof Notification !== 'undefined' ? Notification.permission as Permission : 'denied'
+  );
+
+  const requestPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined') return;
+    const result = await Notification.requestPermission();
+    setPermission(result as Permission);
+  }, []);
+
+  const notify = useCallback((title: string, options?: NotificationOptions) => {
+    if (permission !== 'granted') return;
+    if (document.hasFocus()) return;
+    const n = new Notification(title, { icon: '/favicon.svg', ...options });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+  }, [permission]);
+
+  return { permission, requestPermission, notify };
+}
