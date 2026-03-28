@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listIssues,
-  getIssue,
   triggerScan,
   triggerInvestigate as apiInvestigate,
   triggerFix as apiFix,
@@ -48,16 +47,16 @@ export function Dashboard() {
     localStorage.setItem('fido:notif-dismissed', 'true');
   };
 
-  const fetchIssues = useCallback(async () => {
-    setLoading(true);
+  const fetchIssues = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await listIssues(filter === 'all' ? undefined : filter, showIgnored);
       setIssues(data);
-      setSelectedIds(new Set());
+      if (!silent) setSelectedIds(new Set());
     } catch (err) {
       console.error('Failed to fetch issues:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [filter, showIgnored]);
 
@@ -71,7 +70,7 @@ export function Dashboard() {
     switch (event.type) {
       case 'scan:complete': {
         const count = event.payload?.count as number;
-        fetchIssues();
+        fetchIssues(true);
         if (count > 0) {
           notify('New issues found', { body: `Scan discovered ${count} new issue${count === 1 ? '' : 's'}` });
         }
@@ -81,7 +80,7 @@ export function Dashboard() {
         const field = event.payload?.field as string;
         const newValue = event.payload?.newValue;
         if (id) {
-          getIssue(id).then(() => fetchIssues()).catch(() => {});
+          fetchIssues(true);
           setHighlightedIds(prev => new Set(prev).add(id));
           setTimeout(() => {
             setHighlightedIds(prev => {
@@ -89,7 +88,7 @@ export function Dashboard() {
               next.delete(id);
               return next;
             });
-          }, 2000);
+          }, 3000);
 
           if (field === 'stage' && newValue === 'investigated') {
             notify('Investigation complete', { body: `Issue ${id} has been investigated` });
@@ -111,7 +110,7 @@ export function Dashboard() {
               : issue
           ));
           if (event.payload.status === 'complete') {
-            fetchIssues();
+            fetchIssues(true);
             setHighlightedIds(prev => new Set(prev).add(id));
             setTimeout(() => {
               setHighlightedIds(prev => {
@@ -119,7 +118,7 @@ export function Dashboard() {
                 next.delete(id);
                 return next;
               });
-            }, 2000);
+            }, 3000);
           }
         }
         break;
@@ -390,7 +389,7 @@ export function Dashboard() {
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/10' : ''}`}
+                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
                 <span
