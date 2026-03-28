@@ -567,6 +567,33 @@ done:
 	}
 }
 
+func TestListIssues_IncludesStackTraceAndDatadogURL(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	mgr.WriteError("issue-1", "# Error\n\n## Stack Trace\n```\npanic: runtime error\ngoroutine 1:\nmain.go:42\nmain.go:10\n```")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service:    "svc-a",
+		DatadogURL: "https://app.datadoghq.eu/error-tracking/issue/123",
+	})
+
+	h := NewHandlers(mgr, nil)
+	req := httptest.NewRequest("GET", "/api/issues", nil)
+	w := httptest.NewRecorder()
+	h.ListIssues(w, req)
+
+	var resp []IssueListItem
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(resp))
+	}
+	if resp[0].DatadogURL != "https://app.datadoghq.eu/error-tracking/issue/123" {
+		t.Errorf("DatadogURL: got %q", resp[0].DatadogURL)
+	}
+	if resp[0].StackTrace == "" {
+		t.Error("expected non-empty StackTrace")
+	}
+}
+
 func TestListIssues_RunningOpIncluded(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)

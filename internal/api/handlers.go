@@ -33,6 +33,9 @@ type IssueListItem struct {
 	Complexity  string  `json:"complexity,omitempty"`
 	CodeFixable string  `json:"code_fixable,omitempty"`
 	RunningOp   string  `json:"running_op,omitempty"`
+	Env         string  `json:"env,omitempty"`
+	DatadogURL  string  `json:"datadog_url,omitempty"`
+	StackTrace  string  `json:"stack_trace,omitempty"`
 }
 
 type IssueDetail struct {
@@ -125,6 +128,11 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 			item.Confidence  = issue.Meta.Confidence
 			item.Complexity  = issue.Meta.Complexity
 			item.CodeFixable = issue.Meta.CodeFixable
+			item.Env         = issue.Meta.Env
+			item.DatadogURL  = issue.Meta.DatadogURL
+		}
+		if errContent, err := h.reports.ReadError(issue.ID); err == nil {
+			item.StackTrace = extractStackTrace(errContent)
 		}
 		if issue.MRURL != "" {
 			item.MRURL = &issue.MRURL
@@ -411,6 +419,31 @@ func (h *Handlers) StreamEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+func extractStackTrace(errorContent string) string {
+	lines := strings.Split(errorContent, "\n")
+	inTrace := false
+	var trace []string
+	for _, line := range lines {
+		if strings.Contains(strings.ToLower(line), "stack trace") || strings.Contains(strings.ToLower(line), "stacktrace") {
+			inTrace = true
+			continue
+		}
+		if inTrace {
+			if strings.HasPrefix(line, "```") {
+				if len(trace) > 0 {
+					break
+				}
+				continue
+			}
+			if strings.HasPrefix(line, "## ") {
+				break
+			}
+			trace = append(trace, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(trace, "\n"))
 }
 
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
