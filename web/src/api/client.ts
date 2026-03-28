@@ -110,3 +110,20 @@ export async function fetchMRStatus(id: string): Promise<{ ci_status: string; ci
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
+
+export interface SSEEvent {
+  type: 'scan:complete' | 'issue:updated' | 'issue:progress';
+  payload: Record<string, any>;
+}
+
+export function subscribeEvents(onEvent: (event: SSEEvent) => void): EventSource {
+  const es = new EventSource(`${API_BASE}/api/events`);
+  es.onmessage = (msg) => {
+    try {
+      onEvent(JSON.parse(msg.data));
+    } catch {
+      // ignore malformed
+    }
+  };
+  return es;
+}

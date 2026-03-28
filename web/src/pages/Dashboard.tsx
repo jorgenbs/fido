@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   listIssues,
+  getIssue,
   triggerScan,
   ignoreIssue,
   unignoreIssue,
   type IssueListItem,
+  type SSEEvent,
 } from '../api/client';
+import { useEventStream } from '../hooks/useEventStream';
 import { StageIndicator } from '../components/StageIndicator';
 import { CIStatusBadge } from '../components/CIStatusBadge';
 import { InvestigationBadge } from '../components/InvestigationBadge';
@@ -27,6 +30,7 @@ export function Dashboard() {
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [complexityFilter, setComplexityFilter] = useState('all');
   const [codeFixableOnly, setCodeFixableOnly] = useState(false);
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
 
   const fetchIssues = useCallback(async () => {
     setLoading(true);
@@ -44,6 +48,49 @@ export function Dashboard() {
   useEffect(() => {
     fetchIssues();
   }, [fetchIssues]);
+
+  useEventStream((event: SSEEvent) => {
+    const id = event.payload?.id as string | undefined;
+
+    switch (event.type) {
+      case 'scan:complete':
+        fetchIssues();
+        break;
+      case 'issue:updated':
+        if (id) {
+          getIssue(id).then(() => fetchIssues()).catch(() => {});
+          setHighlightedIds(prev => new Set(prev).add(id));
+          setTimeout(() => {
+            setHighlightedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }, 2000);
+        }
+        break;
+      case 'issue:progress':
+        if (id) {
+          setIssues(prev => prev.map(issue =>
+            issue.id === id
+              ? { ...issue, running_op: event.payload.status === 'started' ? event.payload.action as 'investigate' | 'fix' : undefined }
+              : issue
+          ));
+          if (event.payload.status === 'complete') {
+            fetchIssues();
+            setHighlightedIds(prev => new Set(prev).add(id));
+            setTimeout(() => {
+              setHighlightedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+              });
+            }, 2000);
+          }
+        }
+        break;
+    }
+  });
 
   const handleScan = async () => {
     await triggerScan();
@@ -275,7 +322,7 @@ export function Dashboard() {
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-colors ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''}`}
+                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/10' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
                 <span
