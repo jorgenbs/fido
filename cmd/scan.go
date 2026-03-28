@@ -79,7 +79,7 @@ type errorReportData struct {
 func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) (int, error) {
 	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, cfg.Scan.Since)
 	if err != nil {
-		return 0, fmt.Errorf("searching error issues: %w", err)
+		return 0, fmt.Errorf("scan: %w", err)
 	}
 
 	tmpl, err := loadErrorTemplate()
@@ -89,12 +89,32 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 
 	count := 0
 	for _, issue := range issues {
-		if mgr.Exists(issue.ID) {
-			continue
-		}
-
 		eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
 		tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID)
+
+		if mgr.Exists(issue.ID) {
+			// Update Datadog-sourced fields for existing issues, preserving investigation tags and CI state
+			meta, err := mgr.ReadMetadata(issue.ID)
+			if err != nil {
+				log.Printf("scan: reading meta for %s: %v", issue.ID, err)
+				continue
+			}
+			meta.Title = issue.Attributes.Title
+			meta.Message = issue.Attributes.Message
+			meta.Service = issue.Attributes.Service
+			meta.Env = issue.Attributes.Env
+			meta.FirstSeen = issue.Attributes.FirstSeen
+			meta.LastSeen = issue.Attributes.LastSeen
+			meta.Count = issue.Attributes.Count
+			meta.DatadogURL = datadogURL
+			meta.DatadogEventsURL = eventsURL
+			meta.DatadogTraceURL = tracesURL
+			if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
+				log.Printf("scan: updating meta for %s: %v", issue.ID, err)
+			}
+			continue
+		}
 
 		data := errorReportData{
 			ID:         issue.ID,
@@ -107,7 +127,7 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			Count:      issue.Attributes.Count,
 			Status:     issue.Attributes.Status,
 			StackTrace: issue.Attributes.StackTrace,
-			DatadogURL: fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID),
+			DatadogURL: datadogURL,
 			EventsURL:  eventsURL,
 			TracesURL:  tracesURL,
 		}
@@ -129,7 +149,7 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			FirstSeen:        issue.Attributes.FirstSeen,
 			LastSeen:         issue.Attributes.LastSeen,
 			Count:            issue.Attributes.Count,
-			DatadogURL:       data.DatadogURL,
+			DatadogURL:       datadogURL,
 			DatadogEventsURL: eventsURL,
 			DatadogTraceURL:  tracesURL,
 		}
@@ -240,7 +260,7 @@ func refreshCIStatuses(cfg *config.Config, mgr *reports.Manager) {
 			log.Printf("CI refresh: no repo for service %q (issue %s): %v", resolve.Service, issue.ID, err)
 			continue
 		}
-		status, ciURL, err := gitlab.FetchCIStatus(resolve.Branch, repoPath)
+		mrStatus, ciStatus, ciURL, err := gitlab.FetchMRStatus(resolve.Branch, repoPath)
 		if err != nil {
 			log.Printf("CI refresh: glab failed for %s: %v", issue.ID, err)
 			continue
@@ -250,10 +270,16 @@ func refreshCIStatuses(cfg *config.Config, mgr *reports.Manager) {
 			log.Printf("CI refresh: reading meta for %s: %v", issue.ID, err)
 			continue
 		}
-		meta.CIStatus = status
+		meta.CIStatus = ciStatus
 		meta.CIURL = ciURL
 		if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
 			log.Printf("CI refresh: writing meta for %s: %v", issue.ID, err)
+		}
+		if mrStatus != "" {
+			resolve.MRStatus = mrStatus
+			if err := mgr.WriteResolve(issue.ID, resolve); err != nil {
+				log.Printf("CI refresh: writing resolve for %s: %v", issue.ID, err)
+			}
 		}
 	}
 }
