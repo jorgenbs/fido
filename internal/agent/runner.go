@@ -22,10 +22,13 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 	cmd.Dir = repoDir
 	cmd.Stdin = strings.NewReader(promptContent)
 
-	var buf bytes.Buffer
-	writers := []io.Writer{os.Stdout, &buf}
+	var filteredBuf bytes.Buffer
+	filter := newStreamFilterWriter(&filteredBuf)
+	writers := []io.Writer{os.Stdout, filter}
+	var progressFilter *streamFilterWriter
 	if r.Progress != nil {
-		writers = append(writers, r.Progress)
+		progressFilter = newStreamFilterWriter(r.Progress)
+		writers = append(writers, progressFilter)
 	}
 	cmd.Stdout = io.MultiWriter(writers...)
 
@@ -66,6 +69,12 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 	err := cmd.Wait()
 	close(done)
 
+	// Flush any remaining partial lines from the stream filters.
+	filter.Flush()
+	if progressFilter != nil {
+		progressFilter.Flush()
+	}
+
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("agent failed (exit %d); stderr: %s", exitErr.ExitCode(), stderrBuf.String())
@@ -73,8 +82,8 @@ func (r *Runner) Run(promptContent, repoDir string) (string, error) {
 		return "", fmt.Errorf("running agent: %w; stderr: %s", err, stderrBuf.String())
 	}
 
-	log.Printf("[agent] completed (stdout: %d bytes, stderr: %d bytes)", buf.Len(), stderrBuf.Len())
-	return buf.String(), nil
+	log.Printf("[agent] completed (stdout: %d bytes, stderr: %d bytes)", filteredBuf.Len(), stderrBuf.Len())
+	return filteredBuf.String(), nil
 }
 
 func (r *Runner) RunInteractive(promptContent, repoDir string) error {

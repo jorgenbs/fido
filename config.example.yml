@@ -23,5 +23,5 @@ repositories:
 
 agent:
   # --dangerously-skip-permissions avoids tool-call permission prompts when running non-interactively.
-  investigate: "claude -p --dangerously-skip-permissions"
+  investigate: "claude -p --dangerously-skip-permissions --output-format stream-json --verbose"
   fix: "claude --dangerously-skip-permissions"
