@@ -47,10 +47,11 @@ type MetaData struct {
 }
 
 type IssueSummary struct {
-	ID    string
-	Stage Stage
-	Meta  *MetaData // nil if meta.json not present (pre-v2 issue)
-	MRURL string    // from resolve.json if present
+	ID       string
+	Stage    Stage
+	Meta     *MetaData // nil if meta.json not present (pre-v2 issue)
+	MRURL    string    // from resolve.json if present
+	MRStatus string    // from resolve.json if present
 }
 
 type Manager struct {
@@ -256,6 +257,7 @@ func (m *Manager) ListIssues(showIgnored bool) ([]IssueSummary, error) {
 		}
 		if resolve, err := m.ReadResolve(id); err == nil {
 			summary.MRURL = resolve.MRURL
+			summary.MRStatus = resolve.MRStatus
 		}
 		issues = append(issues, summary)
 	}

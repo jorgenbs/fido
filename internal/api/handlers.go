@@ -147,6 +147,9 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 		if issue.MRURL != "" {
 			item.MRURL = &issue.MRURL
 		}
+		if issue.MRStatus == "merged" {
+			item.CIStatus = "merged"
+		}
 		if op, ok := h.running.Load(issue.ID); ok {
 			item.RunningOp = op.(string)
 		}
@@ -183,6 +186,9 @@ func (h *Handlers) GetIssue(w http.ResponseWriter, r *http.Request) {
 	if meta, err := h.reports.ReadMetadata(id); err == nil {
 		detail.CIStatus = meta.CIStatus
 		detail.CIURL = meta.CIURL
+	}
+	if detail.Resolve != nil && detail.Resolve.MRStatus == "merged" {
+		detail.CIStatus = "merged"
 	}
 	if op, ok := h.running.Load(id); ok {
 		detail.RunningOp = op.(string)

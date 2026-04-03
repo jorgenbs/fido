@@ -5,6 +5,7 @@ interface CIStatusBadgeProps {
 
 const STATUS_STYLES: Record<string, string> = {
   passed: 'bg-green-900/40 text-green-400 border-green-800',
+  merged: 'bg-purple-900/40 text-purple-400 border-purple-800',
   failed: 'bg-red-900/40 text-red-400 border-red-800',
   running: 'bg-yellow-900/40 text-yellow-400 border-yellow-800',
   pending: 'bg-muted text-muted-foreground border-border',

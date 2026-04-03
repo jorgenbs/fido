@@ -94,7 +94,7 @@ export function IssueDetail() {
 
   useEffect(() => {
     if (!id || !issue?.resolve) return;
-    const ciTerminal = ['passed', 'failed', 'canceled'];
+    const ciTerminal = ['passed', 'failed', 'canceled', 'merged'];
     const mrTerminal = ['merged', 'closed'];
     if (
       ciTerminal.includes(issue.ci_status) &&
