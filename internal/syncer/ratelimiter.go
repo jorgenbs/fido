@@ -2,6 +2,7 @@
 package syncer
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -17,7 +18,11 @@ type RateLimiter struct {
 }
 
 // NewRateLimiter creates a rate limiter allowing maxPerMinute requests.
+// Panics if maxPerMinute is not positive.
 func NewRateLimiter(maxPerMinute int) *RateLimiter {
+	if maxPerMinute <= 0 {
+		panic("syncer: maxPerMinute must be positive")
+	}
 	max := float64(maxPerMinute)
 	return &RateLimiter{
 		tokens:     max,
@@ -51,18 +56,26 @@ func (r *RateLimiter) TryAcquire() bool {
 
 // Wait blocks until a token is available, then consumes it.
 func (r *RateLimiter) Wait() {
+	r.WaitContext(context.Background()) //nolint:errcheck
+}
+
+// WaitContext blocks until a token is available or ctx is cancelled.
+func (r *RateLimiter) WaitContext(ctx context.Context) error {
 	for {
 		r.mu.Lock()
 		r.refill()
 		if r.tokens >= 1 {
 			r.tokens--
 			r.mu.Unlock()
-			return
+			return nil
 		}
-		// Calculate wait time for next token
 		deficit := 1 - r.tokens
 		wait := time.Duration(deficit / r.refillRate)
 		r.mu.Unlock()
-		time.Sleep(wait)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(wait):
+		}
 	}
 }
