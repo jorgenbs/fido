@@ -42,7 +42,7 @@ Datadog Error Tracking
 
 ### Prerequisites
 
-- Datadog Personal Access Token with `error_tracking_read` and `logs_read_data` scopes
+- Datadog Personal Access Token with `error_tracking_read`, `apm_read`, and `logs_read_data` scopes
 - `glab` CLI authenticated (for MR creation)
 - An AI agent CLI (default: `claude`)
 
@@ -80,10 +80,7 @@ fido list [--status scanned|investigated|fixed]
 # Show all reports for an issue
 fido show <issue-id>
 
-# Run scan on a recurring interval
-fido daemon [--interval <duration>]
-
-# Start the API server (for the web dashboard)
+# Start the full stack (API + frontend + background sync engine)
 fido serve [--port <port>]
 ```
 
@@ -102,19 +99,12 @@ fido fix <issue-id> --iterate   # re-fix if CI is failing (uses CI logs as conte
 
 The web dashboard gives your team a shared view of all tracked errors and lets anyone trigger investigations or fixes without touching the CLI.
 
-Start the full stack with Docker Compose:
-
 ```bash
-docker compose up
+make build    # build frontend + Go binary
+./fido serve  # API + embedded frontend + background sync engine on :8080
 ```
 
-| Service | Port | Description |
-|---------|------|-------------|
-| `fido` | 8080 | HTTP API |
-| `fido-daemon` | — | Background scanner |
-| `fido-web` | 3000 | Web dashboard |
-
-Open **http://localhost:3000** to access the dashboard.
+Open **http://localhost:8080** to access the dashboard.
 
 ### Dashboard features
 
@@ -139,6 +129,8 @@ All configuration lives in `~/.fido/config.yml`.
 | `datadog.services` | Service names to monitor | `[]` |
 | `scan.interval` | Daemon poll interval | `15m` |
 | `scan.since` | How far back to look | `24h` |
+| `scan.rate_limit` | Max Datadog API requests/minute | `30` |
+| `scan.observation_window` | How long to watch resolved issues for regressions | `24h` |
 | `repositories.<name>.local` | Local path to repo | |
 | `repositories.<name>.git` | Git clone URL | |
 | `agent.investigate` | Agent command for investigation | `claude -p` |
