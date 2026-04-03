@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import {
   getIssue,
   triggerInvestigate,
-  triggerFix,
   subscribeProgress,
   fetchMRStatus,
   type IssueDetail as IssueDetailType,
@@ -21,7 +20,6 @@ export function IssueDetail() {
   const [issue, setIssue] = useState<IssueDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [investigateState, setInvestigateState] = useState<RunningState>('idle');
-  const [fixState, setFixState] = useState<RunningState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [progressLog, setProgressLog] = useState<string>('');
   const sseRef = useRef<EventSource | null>(null);
@@ -61,7 +59,6 @@ export function IssueDetail() {
         sseRef.current?.close();
         setProgressLog('');
         setInvestigateState('idle');
-        setFixState('idle');
         fetchIssue();
       }
     });
@@ -77,9 +74,6 @@ export function IssueDetail() {
         if (data.running_op === 'investigate') {
           setInvestigateState('running');
           startSSE(() => { setInvestigateState('idle'); fetchIssue(); }, () => setInvestigateState('error'));
-        } else if (data.running_op === 'fix') {
-          setFixState('running');
-          startSSE(() => { setFixState('idle'); fetchIssue(); }, () => setFixState('error'));
         }
       })
       .catch((err) => {
@@ -131,22 +125,6 @@ export function IssueDetail() {
       }, () => setInvestigateState('error'));
     } catch (err) {
       setInvestigateState('error');
-      setErrorMsg(String(err));
-    }
-  };
-
-  const handleRefix = async () => {
-    if (!id) return;
-    setErrorMsg(null);
-    setFixState('running');
-    try {
-      await triggerFix(id, true);
-      startSSE(() => {
-        setFixState('idle');
-        fetchIssue();
-      }, () => setFixState('error'));
-    } catch (err) {
-      setFixState('error');
       setErrorMsg(String(err));
     }
   };
@@ -223,18 +201,10 @@ export function IssueDetail() {
         {/* Fix */}
         <Section
           title="Fix"
-          running={fixState === 'running'}
-          runningLabel="Claude is implementing the fix…"
-          disabled={!issue.investigation && fixState !== 'running'}
+          disabled={!issue.investigation}
         >
           {issue.fix ? (
             <MarkdownViewer content={issue.fix} />
-          ) : fixState === 'running' ? (
-            progressLog ? (
-              <pre className="p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
-                {progressLog}
-              </pre>
-            ) : null
           ) : issue.investigation ? (
             <div className="p-4">
               <div className="flex items-center gap-2 bg-muted rounded px-3 py-2 border border-border">
@@ -278,18 +248,6 @@ export function IssueDetail() {
                 </p>
               )}
               <p><span className="text-muted-foreground">Created:</span> {new Date(issue.resolve.created_at).toLocaleString()}</p>
-              {issue.stage === 'fixed' && issue.ci_status === 'failed' && fixState !== 'running' && (
-                <div className="pt-2">
-                  <Button size="sm" variant="outline" onClick={handleRefix} className="border-red-800 text-red-400 hover:bg-red-950/30">
-                    Re-fix (CI failing)
-                  </Button>
-                </div>
-              )}
-              {fixState === 'running' && progressLog && (
-                <pre className="mt-2 p-4 text-xs font-mono text-muted-foreground whitespace-pre-wrap overflow-auto max-h-96">
-                  {progressLog}
-                </pre>
-              )}
             </div>
           </Section>
         )}

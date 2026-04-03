@@ -4,7 +4,6 @@ import {
   listIssues,
   triggerScan,
   triggerInvestigate as apiInvestigate,
-  triggerFix as apiFix,
   ignoreIssue,
   unignoreIssue,
   type IssueListItem,
@@ -158,20 +157,6 @@ export function Dashboard() {
     }
   };
 
-  const handleFix = async (id: string) => {
-    setActionLoading(prev => ({ ...prev, [id]: 'fix' }));
-    try {
-      await apiFix(id);
-    } catch (err) {
-      console.error('Failed to trigger fix:', err);
-    } finally {
-      setActionLoading(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-    }
-  };
 
   const handleBulkIgnore = async () => {
     const toIgnore = issues.filter(i => selectedIds.has(i.id) && !i.ignored);
@@ -521,19 +506,6 @@ export function Dashboard() {
                         }}
                       >
                         {actionLoading[issue.id] === 'investigate' ? 'Starting...' : 'Investigate'}
-                      </Button>
-                    )}
-                    {issue.stage === 'investigated' && !issue.running_op && (
-                      <Button
-                        size="sm"
-                        className="h-6 text-xs"
-                        disabled={!!actionLoading[issue.id]}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFix(issue.id);
-                        }}
-                      >
-                        {actionLoading[issue.id] === 'fix' ? 'Starting...' : 'Fix'}
                       </Button>
                     )}
                     {issue.running_op && (
