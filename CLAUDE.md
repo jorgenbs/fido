@@ -10,10 +10,12 @@ Go backend + React/TypeScript frontend (Vite, shadcn/ui, Tailwind).
 
 ## Commands
 
-- `go build -o fido .` — build (requires `cd web && npm run build` first for embedded frontend)
+- `make build` — build frontend + Go binary (single step)
+- `make web` — build frontend only
+- `go build -o fido .` — build Go binary only (requires frontend already built)
 - `go test ./...` — run tests
 - `cd web && npm run dev` — start frontend dev server with API proxy (port 5174)
-- `./fido serve` — full stack: API + embedded frontend + background scanner (port 8080)
+- `./fido serve` — full stack: API + embedded frontend + background sync engine (port 8080)
 
 ## Backend verification
 
@@ -51,3 +53,10 @@ cd web && node verify.mjs
 - Use conventional commits (`feat:`, `fix:`, `docs:`, `refactor:`, etc.)
 - Commit when finishing a task
 - Use the superpower skills to their extent
+
+## Release tags & changelog
+
+When finishing a session that introduced significant changes:
+1. Create an annotated git tag with the next semver (check `git tag -l` for latest)
+2. Write `changelog/<version>.md` with: version heading, date, links to design specs/plans, summary, and highlights
+3. See existing files in `changelog/` for format reference

@@ -1,6 +1,9 @@
-.PHONY: dev build serve
+.PHONY: dev build serve web
 
-build:
+web:
+	cd web && npm run build
+
+build: web
 	go build -o fido .
 
 serve: build
