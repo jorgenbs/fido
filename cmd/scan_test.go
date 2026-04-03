@@ -167,6 +167,55 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 	}
 }
 
+func TestBuildEventsURL_EncodesQuery(t *testing.T) {
+	u := buildEventsURL("myorg", "datadoghq.eu", "my-service", "prod", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")
+	if u == "" {
+		t.Fatal("expected non-empty URL")
+	}
+	if strings.Contains(u, "query=service:my-service env:") {
+		t.Error("query parameter contains unescaped space")
+	}
+	if !strings.Contains(u, "query=") {
+		t.Error("expected query= in URL")
+	}
+	if !strings.Contains(u, "my-service") {
+		t.Error("expected service name in URL")
+	}
+	if !strings.Contains(u, "prod") {
+		t.Error("expected env in URL")
+	}
+}
+
+func TestBuildEventsURL_EmptyEnv(t *testing.T) {
+	u := buildEventsURL("myorg", "datadoghq.eu", "my-service", "", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")
+	if u == "" {
+		t.Fatal("expected non-empty URL")
+	}
+	if strings.Contains(u, "env:") {
+		t.Error("URL should omit env: when env is empty")
+	}
+}
+
+func TestBuildTracesURL_EncodesQuery(t *testing.T) {
+	u := buildTracesURL("myorg", "datadoghq.eu", "my-service", "prod", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")
+	if u == "" {
+		t.Fatal("expected non-empty URL")
+	}
+	if strings.Contains(u, "query=service:my-service env:") {
+		t.Error("query parameter contains unescaped space")
+	}
+}
+
+func TestBuildTracesURL_EmptyEnv(t *testing.T) {
+	u := buildTracesURL("myorg", "datadoghq.eu", "my-service", "", "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z")
+	if u == "" {
+		t.Fatal("expected non-empty URL")
+	}
+	if strings.Contains(u, "env:") {
+		t.Error("URL should omit env: when env is empty")
+	}
+}
+
 func TestRunScan_CIRefresh_SkipsWhenNoResolve(t *testing.T) {
 	// An issue with no resolve.json should not cause any CI-related errors.
 	server := newTestScanServer(t)

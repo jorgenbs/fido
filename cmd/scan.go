@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -221,9 +222,13 @@ func buildEventsURL(org, site, service, env, firstSeen, lastSeen string) string 
 	if err != nil {
 		return ""
 	}
+	query := "service:" + service
+	if env != "" {
+		query += " env:" + env
+	}
 	return fmt.Sprintf(
-		"https://%s.%s/event/explorer?query=service:%s env:%s&from=%d&to=%d",
-		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
+		"https://%s.%s/event/explorer?query=%s&from=%d&to=%d",
+		org, site, url.QueryEscape(query), from.UnixMilli(), to.UnixMilli(),
 	)
 }
 
@@ -236,9 +241,13 @@ func buildTracesURL(org, site, service, env, firstSeen, lastSeen string) string 
 	if err != nil {
 		return ""
 	}
+	query := "service:" + service
+	if env != "" {
+		query += " env:" + env
+	}
 	return fmt.Sprintf(
-		"https://%s.%s/apm/traces?query=service:%s env:%s&start=%d&end=%d",
-		org, site, service, env, from.UnixMilli(), to.UnixMilli(),
+		"https://%s.%s/apm/traces?query=%s&start=%d&end=%d",
+		org, site, url.QueryEscape(query), from.UnixMilli(), to.UnixMilli(),
 	)
 }
 
