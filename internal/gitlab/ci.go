@@ -83,7 +83,9 @@ func FetchMRStatus(branch, repoPath string) (mrStatus, ciStatus, ciURL string, e
 	output := stdout.String()
 
 	if execErr != nil && len(strings.TrimSpace(output)) == 0 {
-		return "", "", "", fmt.Errorf("glab mr view: %w", execErr)
+		// glab exits non-zero when no MR exists (e.g. branch deleted after merge).
+		// Treat as "no MR found" rather than an error.
+		return "", "", "", nil
 	}
 
 	mrStatus, ciStatus, ciURL = parseMRStatusJSON(output)
