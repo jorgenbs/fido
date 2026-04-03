@@ -1,13 +1,13 @@
 const CONFIDENCE_STYLES: Record<string, string> = {
-  high: 'bg-green-900/40 text-green-400 border-green-800',
-  medium: 'bg-yellow-900/40 text-yellow-400 border-yellow-800',
-  low: 'bg-red-900/40 text-red-400 border-red-800',
+  high: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800',
+  medium: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-800',
+  low: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800',
 };
 
 const COMPLEXITY_STYLES: Record<string, string> = {
-  simple: 'bg-green-900/40 text-green-400 border-green-800',
-  moderate: 'bg-yellow-900/40 text-yellow-400 border-yellow-800',
-  complex: 'bg-red-900/40 text-red-400 border-red-800',
+  simple: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800',
+  moderate: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-800',
+  complex: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800',
 };
 
 interface InvestigationBadgeProps {

@@ -4,10 +4,10 @@ interface CIStatusBadgeProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  passed: 'bg-green-900/40 text-green-400 border-green-800',
-  merged: 'bg-purple-900/40 text-purple-400 border-purple-800',
-  failed: 'bg-red-900/40 text-red-400 border-red-800',
-  running: 'bg-yellow-900/40 text-yellow-400 border-yellow-800',
+  passed: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800',
+  merged: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800',
+  failed: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800',
+  running: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/40 dark:text-yellow-400 dark:border-yellow-800',
   pending: 'bg-muted text-muted-foreground border-border',
   canceled: 'bg-muted text-muted-foreground border-border',
 };
