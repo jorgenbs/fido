@@ -14,6 +14,7 @@ import (
 	"github.com/ruter-as/fido/internal/api"
 	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
+	"github.com/ruter-as/fido/internal/syncer"
 	"github.com/spf13/cobra"
 )
 
@@ -74,7 +75,7 @@ var serveCmd = &cobra.Command{
 			return runFix(issueID, service, cfg, mgr, progress)
 		})
 
-		// Start daemon scanner in background
+		// Start sync engine in background
 		intervalStr := cfg.Scan.Interval
 		if intervalStr == "" {
 			intervalStr = "15m"
@@ -84,30 +85,41 @@ var serveCmd = &cobra.Command{
 			return fmt.Errorf("invalid scan interval %q: %w", intervalStr, err)
 		}
 
+		rateLimit := cfg.Scan.RateLimit
+		if rateLimit <= 0 {
+			rateLimit = 30
+		}
+
 		// Run initial scan synchronously to validate config/credentials
 		fmt.Println("Running initial scan...")
-		count, err := runScan(cfg, ddClient, mgr)
-		if err != nil {
-			return fmt.Errorf("initial scan failed (check your Datadog token): %w", err)
+		count, _, scanErr := runScanWithResults(cfg, ddClient, mgr)
+		if scanErr != nil {
+			return fmt.Errorf("initial scan failed (check your Datadog token): %w", scanErr)
 		}
 		fmt.Printf("Initial scan complete: %d new issues\n", count)
 		hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
+
+		adapter := syncer.NewAdapter(ddClient, mgr, hub, func() ([]syncer.ScanResult, error) {
+			c, results, err := runScanWithResults(cfg, ddClient, mgr)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Printf("Background scan complete: %d new issues\n", c)
+			return results, nil
+		})
+
+		engine := syncer.NewEngine(adapter, syncer.EngineConfig{
+			Interval:  interval,
+			Window:    cfg.Scan.Since,
+			RateLimit: rateLimit,
+		})
 
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer cancel()
 
 		go func() {
-			fmt.Printf("Background scanner started (interval: %s)\n", interval)
-			runDaemonLoop(ctx, interval, func() error {
-				c, scanErr := runScan(cfg, ddClient, mgr)
-				if scanErr != nil {
-					fmt.Printf("Background scan error: %v\n", scanErr)
-					return scanErr
-				}
-				fmt.Printf("Background scan complete: %d new issues\n", c)
-				hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": c}})
-				return nil
-			})
+			fmt.Printf("Sync engine started (interval: %s, rate limit: %d/min)\n", interval, rateLimit)
+			engine.Run(ctx)
 		}()
 
 		fmt.Printf("Fido server listening on :%s\n", port)

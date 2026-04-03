@@ -14,6 +14,7 @@ import (
 	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/gitlab"
 	"github.com/ruter-as/fido/internal/reports"
+	"github.com/ruter-as/fido/internal/syncer"
 	"github.com/spf13/cobra"
 )
 
@@ -163,6 +164,91 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 	refreshCIStatuses(cfg, mgr)
 
 	return count, nil
+}
+
+// runScanWithResults runs a scan and returns both the count and structured results
+// for the sync engine to enqueue follow-up jobs.
+func runScanWithResults(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) (int, []syncer.ScanResult, error) {
+	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, cfg.Scan.Since)
+	if err != nil {
+		return 0, nil, fmt.Errorf("scan: %w", err)
+	}
+
+	tmpl, err := loadErrorTemplate()
+	if err != nil {
+		return 0, nil, fmt.Errorf("loading template: %w", err)
+	}
+
+	var results []syncer.ScanResult
+	count := 0
+
+	for _, issue := range issues {
+		eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID)
+
+		hasStack := issue.Attributes.StackTrace != ""
+
+		if mgr.Exists(issue.ID) {
+			meta, err := mgr.ReadMetadata(issue.ID)
+			if err != nil {
+				log.Printf("scan: reading meta for %s: %v", issue.ID, err)
+				continue
+			}
+			meta.Title = issue.Attributes.Title
+			meta.Message = issue.Attributes.Message
+			meta.Service = issue.Attributes.Service
+			meta.Env = issue.Attributes.Env
+			meta.FirstSeen = issue.Attributes.FirstSeen
+			meta.LastSeen = issue.Attributes.LastSeen
+			meta.Count = issue.Attributes.Count
+			meta.DatadogURL = datadogURL
+			meta.DatadogEventsURL = eventsURL
+			meta.DatadogTraceURL = tracesURL
+			if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
+				log.Printf("scan: updating meta for %s: %v", issue.ID, err)
+			}
+		} else {
+			data := errorReportData{
+				ID: issue.ID, Title: issue.Attributes.Title, Message: issue.Attributes.Message,
+				Service: issue.Attributes.Service, Env: issue.Attributes.Env,
+				FirstSeen: issue.Attributes.FirstSeen, LastSeen: issue.Attributes.LastSeen,
+				Count: issue.Attributes.Count, Status: issue.Attributes.Status,
+				StackTrace: issue.Attributes.StackTrace,
+				DatadogURL: datadogURL, EventsURL: eventsURL, TracesURL: tracesURL,
+			}
+			var buf bytes.Buffer
+			if err := tmpl.Execute(&buf, data); err != nil {
+				return count, results, fmt.Errorf("rendering error report: %w", err)
+			}
+			if err := mgr.WriteError(issue.ID, buf.String()); err != nil {
+				return count, results, fmt.Errorf("writing error report: %w", err)
+			}
+			meta := &reports.MetaData{
+				Title: issue.Attributes.Title, Message: issue.Attributes.Message,
+				Service: issue.Attributes.Service, Env: issue.Attributes.Env,
+				FirstSeen: issue.Attributes.FirstSeen, LastSeen: issue.Attributes.LastSeen,
+				Count: issue.Attributes.Count, DatadogURL: datadogURL,
+				DatadogEventsURL: eventsURL, DatadogTraceURL: tracesURL,
+			}
+			if err := mgr.WriteMetadata(issue.ID, meta); err != nil {
+				return count, results, fmt.Errorf("writing metadata: %w", err)
+			}
+			count++
+		}
+
+		results = append(results, syncer.ScanResult{
+			IssueID:       issue.ID,
+			Service:       issue.Attributes.Service,
+			Env:           issue.Attributes.Env,
+			FirstSeen:     issue.Attributes.FirstSeen,
+			LastSeen:      issue.Attributes.LastSeen,
+			HasStacktrace: hasStack,
+		})
+	}
+
+	refreshCIStatuses(cfg, mgr)
+	return count, results, nil
 }
 
 func loadErrorTemplate() (*template.Template, error) {
