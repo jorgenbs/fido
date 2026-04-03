@@ -23,8 +23,10 @@ type DatadogConfig struct {
 }
 
 type ScanConfig struct {
-	Interval string `yaml:"interval"`
-	Since    string `yaml:"since"`
+	Interval          string `yaml:"interval"`
+	Since             string `yaml:"since"`
+	RateLimit         int    `yaml:"rate_limit"`
+	ObservationWindow string `yaml:"observation_window"`
 }
 
 type RepoConfig struct {
@@ -49,8 +51,10 @@ func Load(path string) (*Config, error) {
 			OrgSubdomain: "app",
 		},
 		Scan: ScanConfig{
-			Interval: "15m",
-			Since:    "24h",
+			Interval:          "15m",
+			Since:             "24h",
+			RateLimit:         30,
+			ObservationWindow: "24h",
 		},
 	}
 

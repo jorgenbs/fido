@@ -12,6 +12,8 @@ datadog:
 scan:
   interval: "15m"   # How often the daemon polls Datadog
   since: "24h"      # How far back to look for errors
+  rate_limit: 30              # Max Datadog API requests per minute
+  observation_window: "24h"   # How long to watch after resolving before confirming
 
 # Map Datadog service names to code repositories.
 # Use "local" for a filesystem path, or "git" for a clone URL.
