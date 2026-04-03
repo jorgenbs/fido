@@ -594,6 +594,57 @@ func TestListIssues_IncludesStackTraceAndDatadogURL(t *testing.T) {
 	}
 }
 
+func TestGetTimeseries(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	issueID := "ts-test-1"
+	mgr.WriteError(issueID, "test error")
+	mgr.WriteMetadata(issueID, &reports.MetaData{Service: "svc", Env: "prod"})
+	mgr.WriteTimeSeries(issueID, &reports.TimeSeries{
+		Buckets: []reports.Bucket{
+			{Timestamp: "2026-04-03T10:00:00Z", Count: 12},
+			{Timestamp: "2026-04-03T11:00:00Z", Count: 8},
+		},
+		Window:      "24h",
+		LastFetched: "2026-04-03T14:00:00Z",
+	})
+
+	h := NewHandlers(mgr, nil)
+	req := httptest.NewRequest("GET", "/api/issues/ts-test-1/timeseries?window=24h", nil)
+	req = withURLParam(req, "id", issueID)
+	w := httptest.NewRecorder()
+
+	h.GetTimeseries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var resp reports.TimeSeries
+	json.NewDecoder(w.Body).Decode(&resp)
+
+	if len(resp.Buckets) != 2 {
+		t.Errorf("expected 2 buckets, got %d", len(resp.Buckets))
+	}
+}
+
+func TestGetTimeseries_NotFound(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+	h := NewHandlers(mgr, nil)
+
+	req := httptest.NewRequest("GET", "/api/issues/nonexistent/timeseries", nil)
+	req = withURLParam(req, "id", "nonexistent")
+	w := httptest.NewRecorder()
+
+	h.GetTimeseries(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
 func TestListIssues_RunningOpIncluded(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)

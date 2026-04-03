@@ -437,6 +437,26 @@ func (h *Handlers) StreamEvents(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handlers) GetTimeseries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if !h.reports.Exists(id) {
+		writeError(w, http.StatusNotFound, "issue not found")
+		return
+	}
+
+	ts, err := h.reports.ReadTimeSeries(id)
+	if err != nil {
+		// No timeseries data yet — return empty
+		writeJSON(w, http.StatusOK, &reports.TimeSeries{
+			Buckets: []reports.Bucket{},
+			Window:  r.URL.Query().Get("window"),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ts)
+}
+
 func extractStackTrace(errorContent string) string {
 	lines := strings.Split(errorContent, "\n")
 	inTrace := false
