@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   listIssues,
   triggerScan,
@@ -27,6 +27,7 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const navigate = useNavigate();
   const lastSelectedRef = useRef<string | null>(null);
   const [serviceFilter, setServiceFilter] = useState('all');
   const [confidenceFilter, setConfidenceFilter] = useState('all');
@@ -89,14 +90,15 @@ export function Dashboard() {
             });
           }, 3000);
 
+          const goToIssue = () => navigate(`/issues/${id}`);
           if (field === 'stage' && newValue === 'investigated') {
-            notify('Investigation complete', { body: `Issue ${id} has been investigated` });
+            notify('Investigation complete', { body: `Issue ${id} has been investigated`, onClick: goToIssue });
           } else if (field === 'stage' && newValue === 'fixed') {
-            notify('Fix applied', { body: `Issue ${id} has been fixed` });
+            notify('Fix applied', { body: `Issue ${id} has been fixed`, onClick: goToIssue });
           } else if (field === 'ci_status' && newValue === 'passed') {
-            notify('CI passed', { body: `Issue ${id}: pipeline passed` });
+            notify('CI passed', { body: `Issue ${id}: pipeline passed`, onClick: goToIssue });
           } else if (field === 'ci_status' && newValue === 'failed') {
-            notify('CI failed', { body: `Issue ${id}: pipeline failed` });
+            notify('CI failed', { body: `Issue ${id}: pipeline failed`, onClick: goToIssue });
           }
         }
         break;

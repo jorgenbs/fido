@@ -155,6 +155,8 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		return fmt.Errorf("agent failed: %w", err)
 	}
 
+	output = stripPreamble(output)
+
 	log.Printf("[investigate] %s: writing investigation report (%d bytes)", issueID, len(output))
 	if err := mgr.WriteInvestigation(issueID, output); err != nil {
 		return fmt.Errorf("writing investigation report: %w", err)
@@ -167,6 +169,19 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 
 	fmt.Printf("Investigation complete for %s\n", issueID)
 	return nil
+}
+
+// stripPreamble removes agent reasoning text that appears before the
+// structured report. It looks for the first markdown heading (## ) and
+// drops everything above it.
+func stripPreamble(output string) string {
+	lines := strings.Split(output, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			return strings.Join(lines[i:], "\n")
+		}
+	}
+	return output // no heading found — return as-is
 }
 
 func parseInvestigationTags(content string) (confidence, complexity, codeFixable string) {

@@ -127,6 +127,33 @@ func TestParseInvestigationTags_MissingTags(t *testing.T) {
 	}
 }
 
+func TestStripPreamble_RemovesThinkingText(t *testing.T) {
+	input := "Let me analyze this.\nLooking at the code...\n\n---\n\n## Root Cause\nThe bug is here."
+	got := stripPreamble(input)
+	if !strings.HasPrefix(got, "## Root Cause") {
+		t.Errorf("expected to start with '## Root Cause', got %q", got[:min(len(got), 40)])
+	}
+	if strings.Contains(got, "Let me analyze") {
+		t.Error("expected thinking text to be stripped")
+	}
+}
+
+func TestStripPreamble_NoHeading(t *testing.T) {
+	input := "Just plain text with no headings"
+	got := stripPreamble(input)
+	if got != input {
+		t.Errorf("expected unchanged output, got %q", got)
+	}
+}
+
+func TestStripPreamble_HeadingOnFirstLine(t *testing.T) {
+	input := "## Root Cause\nThe bug is here."
+	got := stripPreamble(input)
+	if got != input {
+		t.Errorf("expected unchanged output, got %q", got)
+	}
+}
+
 func TestInvestigate_ParsesAndStoresTags(t *testing.T) {
 	reportsDir := t.TempDir()
 	repoDir := t.TempDir()
