@@ -13,6 +13,12 @@ import (
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV2"
 )
 
+// TimelineBucket is a time-bucketed occurrence count.
+type TimelineBucket struct {
+	Timestamp string
+	Count     int64
+}
+
 type Client struct {
 	token        string
 	site         string
@@ -324,6 +330,87 @@ func mapKeys(m map[string]interface{}) []string {
 // OverrideServers replaces the SDK server configuration (used for testing with httptest).
 func (c *Client) OverrideServers(servers datadog.ServerConfigurations) {
 	c.cfg.Servers = servers
+}
+
+// FetchErrorTimeline returns time-bucketed error occurrence counts for the given
+// service within the window specified by since (a Go duration string like "24h").
+// It uses the Spans Aggregate API with a timeseries compute to produce the buckets.
+func (c *Client) FetchErrorTimeline(service, env, since string) ([]TimelineBucket, error) {
+	dur, err := time.ParseDuration(since)
+	if err != nil {
+		return nil, fmt.Errorf("invalid since duration %q: %w", since, err)
+	}
+
+	now := time.Now()
+	from := now.Add(-dur)
+
+	query := fmt.Sprintf("service:%s status:error", service)
+	if env != "" {
+		query += " env:" + env
+	}
+
+	// Choose bucket interval based on window size.
+	interval := "1h"
+	if dur > 7*24*time.Hour {
+		interval = "1d"
+	}
+
+	computeType := datadogV2.SPANSCOMPUTETYPE_TIMESERIES
+	body := datadogV2.SpansAggregateRequest{
+		Data: &datadogV2.SpansAggregateData{
+			Attributes: &datadogV2.SpansAggregateRequestAttributes{
+				Compute: []datadogV2.SpansCompute{
+					{
+						Aggregation: datadogV2.SPANSAGGREGATIONFUNCTION_COUNT,
+						Type:        &computeType,
+						Interval:    datadog.PtrString(interval),
+					},
+				},
+				Filter: &datadogV2.SpansQueryFilter{
+					Query: datadog.PtrString(query),
+					From:  datadog.PtrString(from.Format(time.RFC3339)),
+					To:    datadog.PtrString(now.Format(time.RFC3339)),
+				},
+			},
+			Type: datadogV2.SPANSAGGREGATEREQUESTTYPE_AGGREGATE_REQUEST.Ptr(),
+		},
+	}
+
+	resp, _, err := c.spansAPI.AggregateSpans(c.ctx(), body)
+	if err != nil {
+		return nil, fmt.Errorf("aggregating spans: %w", err)
+	}
+
+	// The timeseries compute returns a single bucket whose "c0" value is a
+	// SpansAggregateBucketValueTimeseries with individual time+value points.
+	var buckets []TimelineBucket
+	for _, b := range resp.GetData() {
+		attrs := b.GetAttributes()
+		computes := attrs.GetComputes()
+		c0, ok := computes["c0"]
+		if !ok {
+			continue
+		}
+		switch v := c0.GetActualInstance().(type) {
+		case *datadogV2.SpansAggregateBucketValueTimeseries:
+			for _, pt := range v.Items {
+				ts := pt.GetTime()
+				val := pt.GetValue()
+				buckets = append(buckets, TimelineBucket{
+					Timestamp: ts,
+					Count:     int64(val),
+				})
+			}
+		case *float64:
+			// Scalar count — treat as single bucket with the from timestamp.
+			buckets = append(buckets, TimelineBucket{
+				Timestamp: from.UTC().Format(time.RFC3339),
+				Count:     int64(*v),
+			})
+		}
+	}
+
+	return buckets, nil
 }
 
 func (c *Client) SearchLogs(queryStr, since string) ([]LogEntry, error) {

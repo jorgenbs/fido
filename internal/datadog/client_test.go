@@ -129,6 +129,47 @@ func TestClient_FetchIssueContext_ReturnsDeepLinks(t *testing.T) {
 	}
 }
 
+func TestClient_FetchErrorTimeline(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Simulate a timeseries compute response: one aggregate bucket whose
+		// "c0" value is a JSON array of {time, value} points.
+		resp := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"type": "spans_metrics",
+					"attributes": map[string]interface{}{
+						"computes": map[string]interface{}{
+							// A timeseries is a JSON array of {time, value} objects.
+							"c0": []map[string]interface{}{
+								{"time": "2024-04-01T08:00:00+00:00", "value": float64(12)},
+								{"time": "2024-04-01T09:00:00+00:00", "value": float64(8)},
+							},
+						},
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	buckets, err := client.FetchErrorTimeline("svc-a", "production", "24h")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("expected 2 buckets, got %d", len(buckets))
+	}
+	if buckets[0].Count != 12 {
+		t.Errorf("expected first bucket count 12, got %d", buckets[0].Count)
+	}
+	if buckets[0].Timestamp != "2024-04-01T08:00:00+00:00" {
+		t.Errorf("expected first bucket timestamp 2024-04-01T08:00:00+00:00, got %s", buckets[0].Timestamp)
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
 	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {
