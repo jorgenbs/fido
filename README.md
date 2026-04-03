@@ -42,7 +42,7 @@ Datadog Error Tracking
 
 ### Prerequisites
 
-- Datadog Personal Access Token with `error_tracking_issue_read` and `logs_read_data` scopes
+- Datadog Personal Access Token with `error_tracking_read` and `logs_read_data` scopes
 - `glab` CLI authenticated (for MR creation)
 - An AI agent CLI (default: `claude`)
 

@@ -15,6 +15,7 @@ export function useNotifications() {
 
   const notify = useCallback((title: string, options?: NotificationOptions) => {
     if (permission !== 'granted') return;
+    if (typeof Notification === 'undefined') return;
     const n = new Notification(title, { icon: '/favicon.svg', ...options });
     n.onclick = () => {
       window.focus();

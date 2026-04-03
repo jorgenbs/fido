@@ -93,6 +93,16 @@ func (h *Handlers) publish(evt Event) {
 	}
 }
 
+func (h *Handlers) DebugPublishEvent(w http.ResponseWriter, r *http.Request) {
+	var evt Event
+	if err := json.NewDecoder(r.Body).Decode(&evt); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid event JSON")
+		return
+	}
+	h.publish(evt)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "published"})
+}
+
 func (h *Handlers) SetScanFunc(fn ScanFunc)              { h.scanFn = fn }
 func (h *Handlers) SetInvestigateFunc(fn InvestigateFunc) { h.investigateFn = fn }
 func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
