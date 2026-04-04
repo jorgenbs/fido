@@ -46,6 +46,9 @@ func TestEngine_RunsAndEnqueuesFollowUpJobs(t *testing.T) {
 		RateLimit: 600,
 	})
 
+	// Simulate server feedback: generous limit so follow-up jobs can proceed.
+	eng.Limiter().Update(600, 600, time.Minute, time.Minute)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
 	defer cancel()
 
@@ -76,16 +79,20 @@ func TestEngine_RespectsRateLimit(t *testing.T) {
 	eng := NewEngine(deps, EngineConfig{
 		Interval:  50 * time.Millisecond,
 		Window:    "24h",
-		RateLimit: 6, // 6 per minute — initial burst of 6, then ~1 every 10s
+		RateLimit: 6,
 	})
+
+	// Simulate server feedback: limit=3, remaining=3, period=60s, reset=60s
+	// Only 3 requests allowed in the window.
+	eng.Limiter().Update(3, 3, 60*time.Second, 60*time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
 	eng.Run(ctx)
 
-	// 20 issues × 2 follow-ups = 40 jobs. With rate limit of 6/min,
-	// initial burst allows ~6 jobs, then effectively none in 200ms.
+	// 20 issues × 2 follow-ups = 40 jobs. With limit of 3 per 60s,
+	// only ~3 should complete in 200ms.
 	total := deps.bucketCount.Load() + deps.stackCount.Load()
 	if total >= 20 {
 		t.Errorf("rate limiter not working: %d follow-up jobs completed (expected < 20)", total)

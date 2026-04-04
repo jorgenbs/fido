@@ -114,11 +114,22 @@ var serveCmd = &cobra.Command{
 			RateLimit: rateLimit,
 		})
 
+		// Wire Datadog response headers into the engine's rate limiter.
+		limiter := engine.Limiter()
+		ddClient.SetRateLimitCallback(func(info datadog.RateLimitInfo) {
+			limiter.Update(
+				info.Limit,
+				info.Remaining,
+				time.Duration(info.Period)*time.Second,
+				info.Reset,
+			)
+		})
+
 		ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer cancel()
 
 		go func() {
-			fmt.Printf("Sync engine started (interval: %s, rate limit: %d/min)\n", interval, rateLimit)
+			fmt.Printf("Sync engine started (interval: %s, rate limit: adaptive from Datadog headers)\n", interval)
 			engine.Run(ctx)
 		}()
 

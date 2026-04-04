@@ -71,6 +71,12 @@ func NewEngine(deps Deps, cfg EngineConfig) *Engine {
 	}
 }
 
+// Limiter returns the engine's rate limiter so external code can feed it
+// server-reported rate limit headers.
+func (e *Engine) Limiter() *RateLimiter {
+	return e.limiter
+}
+
 // Run blocks until ctx is cancelled. It runs an initial sync, starts a worker
 // goroutine to drain the queue, and enqueues sync_issues on each interval tick.
 func (e *Engine) Run(ctx context.Context) {

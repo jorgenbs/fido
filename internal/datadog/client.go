@@ -418,14 +418,55 @@ func (c *Client) SearchLogs(queryStr, since string) ([]LogEntry, error) {
 	return nil, nil
 }
 
-// bearerTransport adds an Authorization: Bearer header to all requests.
+// RateLimitInfo holds parsed rate limit headers from a Datadog API response.
+type RateLimitInfo struct {
+	Limit     int           // x-ratelimit-limit: max requests per period
+	Period    int           // x-ratelimit-period: period in seconds
+	Remaining int           // x-ratelimit-remaining: requests left in current period
+	Reset     time.Duration // x-ratelimit-reset: seconds until limit resets
+	Name      string        // x-ratelimit-name: which rate limit bucket
+}
+
+// RateLimitCallback is called after each response with parsed rate limit headers.
+// Only called when headers are present.
+type RateLimitCallback func(info RateLimitInfo)
+
+// bearerTransport adds an Authorization: Bearer header to all requests
+// and optionally parses rate limit headers from responses.
 type bearerTransport struct {
-	token string
-	base  http.RoundTripper
+	token         string
+	base          http.RoundTripper
+	onRateLimit   RateLimitCallback
 }
 
 func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
 	req.Header.Set("Authorization", "Bearer "+t.token)
-	return t.base.RoundTrip(req)
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		return resp, err
+	}
+
+	// Parse rate limit headers if callback is set and headers are present.
+	if t.onRateLimit != nil && resp.Header.Get("X-Ratelimit-Limit") != "" {
+		info := RateLimitInfo{
+			Name: resp.Header.Get("X-Ratelimit-Name"),
+		}
+		fmt.Sscanf(resp.Header.Get("X-Ratelimit-Limit"), "%d", &info.Limit)
+		fmt.Sscanf(resp.Header.Get("X-Ratelimit-Period"), "%d", &info.Period)
+		fmt.Sscanf(resp.Header.Get("X-Ratelimit-Remaining"), "%d", &info.Remaining)
+		var resetSec int
+		fmt.Sscanf(resp.Header.Get("X-Ratelimit-Reset"), "%d", &resetSec)
+		info.Reset = time.Duration(resetSec) * time.Second
+		t.onRateLimit(info)
+	}
+
+	return resp, err
+}
+
+// SetRateLimitCallback sets a function to be called with rate limit info from responses.
+func (c *Client) SetRateLimitCallback(cb RateLimitCallback) {
+	if bt, ok := c.cfg.HTTPClient.Transport.(*bearerTransport); ok {
+		bt.onRateLimit = cb
+	}
 }
