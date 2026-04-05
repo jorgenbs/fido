@@ -19,6 +19,7 @@ import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toggleTheme } from '../lib/theme';
+import { Sparkline } from '../components/Sparkline';
 
 export function Dashboard() {
   const [issues, setIssues] = useState<IssueListItem[]>([]);
@@ -33,6 +34,7 @@ export function Dashboard() {
   const [confidenceFilter, setConfidenceFilter] = useState('all');
   const [complexityFilter, setComplexityFilter] = useState('all');
   const [codeFixableOnly, setCodeFixableOnly] = useState(false);
+  const [timeWindow, setTimeWindow] = useState('24h');
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
 
@@ -50,7 +52,7 @@ export function Dashboard() {
   const fetchIssues = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const data = await listIssues(filter === 'all' ? undefined : filter, showIgnored);
+      const data = await listIssues(filter === 'all' ? undefined : filter, showIgnored, timeWindow);
       setIssues(data);
       if (!silent) setSelectedIds(new Set());
     } catch (err) {
@@ -58,7 +60,7 @@ export function Dashboard() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [filter, showIgnored]);
+  }, [filter, showIgnored, timeWindow]);
 
   useEffect(() => {
     fetchIssues();
@@ -315,6 +317,18 @@ export function Dashboard() {
             />
             Show ignored
           </label>
+          <Select value={timeWindow} onValueChange={setTimeWindow}>
+            <SelectTrigger className="w-24 h-7 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1h">1h</SelectItem>
+              <SelectItem value="6h">6h</SelectItem>
+              <SelectItem value="24h">24h</SelectItem>
+              <SelectItem value="7d">7d</SelectItem>
+              <SelectItem value="30d">30d</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" onClick={handleScan} className="h-7 text-xs">
             Scan Now
           </Button>
@@ -353,7 +367,7 @@ export function Dashboard() {
       ) : (
         <div>
           {/* Header row */}
-          <div className="grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
+          <div className="grid grid-cols-[32px_2fr_1fr_80px_0.6fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
             <span>
               <Checkbox
                 checked={allSelected}
@@ -364,6 +378,8 @@ export function Dashboard() {
             </span>
             <span>Issue</span>
             <span>Service</span>
+            <span>Activity</span>
+            <span>Trend</span>
             <span>Stage</span>
             <span>Confidence</span>
             <span>Complexity</span>
@@ -376,7 +392,7 @@ export function Dashboard() {
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className={`grid grid-cols-[32px_2.5fr_1fr_0.8fr_0.8fr_0.6fr_0.5fr_0.8fr_0.8fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : ''}`}
+                className={`grid grid-cols-[32px_2fr_1fr_80px_0.6fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
                 <span
@@ -403,6 +419,28 @@ export function Dashboard() {
                   )}
                 </span>
                 <span className="text-xs text-muted-foreground">{issue.service}</span>
+                <span>
+                  {issue.timeseries && issue.timeseries.length > 0 ? (
+                    <Sparkline data={issue.timeseries} trend={issue.stats?.trend} />
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </span>
+                <span>
+                  {issue.stats ? (
+                    <span className={`text-xs font-medium ${
+                      issue.stats.trend === 'rising' ? 'text-red-400' :
+                      issue.stats.trend === 'declining' ? 'text-green-400' :
+                      'text-muted-foreground'
+                    }`}>
+                      {issue.stats.trend === 'rising' ? '↑' :
+                       issue.stats.trend === 'declining' ? '↓' : '→'}
+                      {' '}{issue.stats.total}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">—</span>
+                  )}
+                </span>
                 <span>
                   {issue.running_op ? (
                     <span className="inline-flex items-center gap-1 text-blue-400 text-xs font-medium">
