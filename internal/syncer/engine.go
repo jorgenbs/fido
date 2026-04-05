@@ -159,7 +159,6 @@ func (e *Engine) executeSyncIssues() {
 	}
 
 	for _, r := range results {
-		// Store metadata so follow-up jobs have access to service/env/timestamps.
 		e.scanMeta[r.IssueID] = r
 
 		if e.deps.IsBucketStale(r.IssueID, e.config.Window, 30*time.Minute) {

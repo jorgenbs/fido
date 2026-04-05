@@ -381,36 +381,71 @@ func (c *Client) FetchErrorTimeline(service, env, since string) ([]TimelineBucke
 		return nil, fmt.Errorf("aggregating spans: %w", err)
 	}
 
-	// The timeseries compute returns a single bucket whose "c0" value is a
-	// SpansAggregateBucketValueTimeseries with individual time+value points.
+	// The Datadog API returns "compute" (singular) but the SDK also supports
+	// "computes" (plural) via GetComputes(). Try the raw "compute" first (real API),
+	// then fall back to the typed "computes" (SDK test servers / future API versions).
 	var buckets []TimelineBucket
 	for _, b := range resp.GetData() {
 		attrs := b.GetAttributes()
-		computes := attrs.GetComputes()
-		c0, ok := computes["c0"]
-		if !ok {
+		if parsed := parseComputeRaw(attrs.GetCompute()); len(parsed) > 0 {
+			buckets = append(buckets, parsed...)
 			continue
 		}
-		switch v := c0.GetActualInstance().(type) {
-		case *datadogV2.SpansAggregateBucketValueTimeseries:
-			for _, pt := range v.Items {
-				ts := pt.GetTime()
-				val := pt.GetValue()
-				buckets = append(buckets, TimelineBucket{
-					Timestamp: ts,
-					Count:     int64(val),
-				})
-			}
-		case *float64:
-			// Scalar count — treat as single bucket with the from timestamp.
-			buckets = append(buckets, TimelineBucket{
-				Timestamp: from.UTC().Format(time.RFC3339),
-				Count:     int64(*v),
-			})
+		if parsed := parseComputeTyped(attrs.GetComputes()); len(parsed) > 0 {
+			buckets = append(buckets, parsed...)
 		}
 	}
 
 	return buckets, nil
+}
+
+// parseComputeRaw extracts buckets from the raw "compute" field (map[string]interface{}).
+func parseComputeRaw(compute interface{}) []TimelineBucket {
+	computeMap, ok := compute.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	c0, ok := computeMap["c0"]
+	if !ok {
+		return nil
+	}
+	points, ok := c0.([]interface{})
+	if !ok {
+		return nil
+	}
+	var buckets []TimelineBucket
+	for _, pt := range points {
+		ptMap, ok := pt.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		ts, _ := ptMap["time"].(string)
+		val, _ := ptMap["value"].(float64)
+		if ts != "" {
+			buckets = append(buckets, TimelineBucket{Timestamp: ts, Count: int64(val)})
+		}
+	}
+	return buckets
+}
+
+// parseComputeTyped extracts buckets from the typed "computes" field.
+func parseComputeTyped(computes map[string]datadogV2.SpansAggregateBucketValue) []TimelineBucket {
+	c0, ok := computes["c0"]
+	if !ok {
+		return nil
+	}
+	switch v := c0.GetActualInstance().(type) {
+	case *datadogV2.SpansAggregateBucketValueTimeseries:
+		var buckets []TimelineBucket
+		for _, pt := range v.Items {
+			buckets = append(buckets, TimelineBucket{
+				Timestamp: pt.GetTime(),
+				Count:     int64(pt.GetValue()),
+			})
+		}
+		return buckets
+	}
+	return nil
 }
 
 func (c *Client) SearchLogs(queryStr, since string) ([]LogEntry, error) {
