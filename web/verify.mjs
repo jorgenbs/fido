@@ -25,7 +25,7 @@ async function checkPage(url, label) {
   page.on('console', onErr);
   page.on('pageerror', onUncaught);
 
-  await page.goto(url, { waitUntil: 'networkidle', timeout: 10000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 10000 });
   await page.waitForTimeout(1000);
 
   page.off('console', onErr);
