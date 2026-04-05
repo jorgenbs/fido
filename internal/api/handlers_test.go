@@ -594,6 +594,52 @@ func TestListIssues_IncludesStackTraceAndDatadogURL(t *testing.T) {
 	}
 }
 
+func TestListIssues_IncludesTimeseries(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	issueID := "test-ts-issue"
+	mgr.WriteError(issueID, "## Error\ntest error")
+	mgr.WriteMetadata(issueID, &reports.MetaData{
+		Title:   "Test Error",
+		Service: "test-svc",
+	})
+	mgr.WriteTimeSeries(issueID, &reports.TimeSeries{
+		Buckets: []reports.Bucket{
+			{Timestamp: "2026-04-05T00:00:00Z", Count: 5},
+			{Timestamp: "2026-04-05T01:00:00Z", Count: 10},
+		},
+		Window:      "24h",
+		LastFetched: "2026-04-05T02:00:00Z",
+	})
+
+	h := NewHandlers(mgr, nil)
+	req := httptest.NewRequest("GET", "/api/issues?window=24h", nil)
+	w := httptest.NewRecorder()
+	h.ListIssues(w, req)
+
+	if w.Code != 200 {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+
+	var items []IssueListItem
+	if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("len = %d, want 1", len(items))
+	}
+	if len(items[0].Timeseries) != 2 {
+		t.Errorf("timeseries len = %d, want 2", len(items[0].Timeseries))
+	}
+	if items[0].Stats == nil {
+		t.Fatal("stats is nil")
+	}
+	if items[0].Stats.Total != 15 {
+		t.Errorf("stats.Total = %d, want 15", items[0].Stats.Total)
+	}
+}
+
 func TestGetTimeseries(t *testing.T) {
 	dir := t.TempDir()
 	mgr := reports.NewManager(dir)
