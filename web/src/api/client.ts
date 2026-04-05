@@ -19,6 +19,8 @@ export interface IssueListItem {
   running_op?: 'investigate' | 'fix';
   datadog_url: string;
   stack_trace: string;
+  timeseries?: { timestamp: string; count: number }[];
+  stats?: { total: number; peak: number; trend: 'rising' | 'declining' | 'stable' };
 }
 
 export interface ResolveData {
@@ -43,11 +45,26 @@ export interface IssueDetail {
   running_op?: 'investigate' | 'fix';
 }
 
-export async function listIssues(status?: string, showIgnored?: boolean): Promise<IssueListItem[]> {
+export async function listIssues(status?: string, showIgnored?: boolean, window?: string): Promise<IssueListItem[]> {
   const params = new URLSearchParams();
   if (status) params.set('status', status);
   if (showIgnored) params.set('show_ignored', 'true');
+  if (window) params.set('window', window);
   const res = await fetch(`${API_BASE}/api/issues?${params}`);
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return res.json();
+}
+
+export interface TimeseriesData {
+  buckets: { timestamp: string; count: number }[];
+  window: string;
+  last_fetched: string;
+}
+
+export async function fetchTimeseries(id: string, window?: string): Promise<TimeseriesData> {
+  const params = new URLSearchParams();
+  if (window) params.set('window', window);
+  const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/timeseries?${params}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return res.json();
 }
