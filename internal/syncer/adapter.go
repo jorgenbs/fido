@@ -105,12 +105,21 @@ func (a *Adapter) SaveBuckets(issueID string, buckets []BucketData, window strin
 }
 
 func (a *Adapter) SaveStacktrace(issueID, stacktrace string) error {
+	if stacktrace == "" {
+		return nil // don't replace marker with empty content
+	}
 	content, err := a.mgr.ReadError(issueID)
 	if err != nil {
 		return err
 	}
+	replacement := "```\n" + stacktrace + "\n```"
 	if strings.Contains(content, "<!-- STACK_TRACE_PENDING -->") {
-		updated := strings.Replace(content, "<!-- STACK_TRACE_PENDING -->", "```\n"+stacktrace+"\n```", 1)
+		updated := strings.Replace(content, "<!-- STACK_TRACE_PENDING -->", replacement, 1)
+		return a.mgr.WriteError(issueID, updated)
+	}
+	// Fix up empty code blocks left by a previous empty-stacktrace save
+	if strings.Contains(content, "```\n\n```") {
+		updated := strings.Replace(content, "```\n\n```", replacement, 1)
 		return a.mgr.WriteError(issueID, updated)
 	}
 	return nil
@@ -129,7 +138,14 @@ func (a *Adapter) HasStacktrace(issueID string) bool {
 	if err != nil {
 		return false
 	}
-	return !strings.Contains(content, "<!-- STACK_TRACE_PENDING -->")
+	if strings.Contains(content, "<!-- STACK_TRACE_PENDING -->") {
+		return false
+	}
+	// Detect empty stack trace left by a previous empty replacement
+	if strings.Contains(content, "```\n\n```") {
+		return false
+	}
+	return true
 }
 
 func (a *Adapter) Publish(eventType string, payload map[string]any) {
