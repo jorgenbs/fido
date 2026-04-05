@@ -5,9 +5,12 @@ import {
   triggerInvestigate,
   subscribeProgress,
   fetchMRStatus,
+  fetchTimeseries,
   type IssueDetail as IssueDetailType,
+  type TimeseriesData,
 } from '../api/client';
 import { StageIndicator } from '../components/StageIndicator';
+import { Sparkline } from '../components/Sparkline';
 import { CIStatusBadge } from '../components/CIStatusBadge';
 import { MarkdownViewer } from '../components/MarkdownViewer';
 import { Button } from '../components/ui/button';
@@ -25,6 +28,7 @@ export function IssueDetail() {
   const sseRef = useRef<EventSource | null>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [copied, setCopied] = useState(false);
+  const [timeseries, setTimeseries] = useState<TimeseriesData | null>(null);
 
   const fetchIssue = async () => {
     if (!id) return;
@@ -84,6 +88,11 @@ export function IssueDetail() {
       sseRef.current?.close();
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
     };
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetchTimeseries(id).then(setTimeseries).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -174,6 +183,27 @@ export function IssueDetail() {
         <Section title="Error Report">
           <MarkdownViewer content={issue.error} />
         </Section>
+
+        {timeseries && timeseries.buckets.length > 0 && (
+          <Section title="Error Frequency">
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground">
+                <span>{new Date(timeseries.buckets[0].timestamp).toLocaleDateString()}</span>
+                <span>{timeseries.window} window</span>
+                <span>{new Date(timeseries.buckets[timeseries.buckets.length - 1].timestamp).toLocaleDateString()}</span>
+              </div>
+              <Sparkline
+                data={timeseries.buckets}
+                width={700}
+                height={80}
+              />
+              <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
+                <span>Total: <strong className="text-foreground">{timeseries.buckets.reduce((s, b) => s + b.count, 0)}</strong></span>
+                <span>Peak: <strong className="text-foreground">{Math.max(...timeseries.buckets.map(b => b.count))}</strong></span>
+              </div>
+            </div>
+          </Section>
+        )}
 
         {/* Investigation */}
         <Section
