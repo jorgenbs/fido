@@ -17,20 +17,11 @@ type ScanResult struct {
 	HasStacktrace bool
 }
 
-// BucketData matches the reports.Bucket type to avoid circular imports.
-type BucketData struct {
-	Timestamp string
-	Count     int64
-}
-
 // Deps abstracts the external dependencies the engine needs.
 type Deps interface {
 	ScanIssues() ([]ScanResult, error)
-	FetchBuckets(issueID, service, env, window string) ([]BucketData, error)
 	FetchStacktrace(issueID, service, env, firstSeen, lastSeen string) (string, error)
-	SaveBuckets(issueID string, buckets []BucketData, window string) error
 	SaveStacktrace(issueID, stacktrace string) error
-	IsBucketStale(issueID, window string, maxAge time.Duration) bool
 	HasStacktrace(issueID string) bool
 	Publish(eventType string, payload map[string]any)
 }
@@ -38,7 +29,6 @@ type Deps interface {
 // EngineConfig holds runtime settings.
 type EngineConfig struct {
 	Interval  time.Duration
-	Window    string
 	RateLimit int
 }
 
@@ -129,11 +119,6 @@ func (e *Engine) worker(ctx context.Context) {
 		case JobSyncIssues:
 			// sync_issues runs without rate limiting (one per cycle).
 			e.executeSyncIssues()
-		case JobFetchBuckets:
-			if err := e.limiter.WaitContext(ctx); err != nil {
-				return
-			}
-			e.executeFetchBuckets(job)
 		case JobFetchStacktrace:
 			if err := e.limiter.WaitContext(ctx); err != nil {
 				return
@@ -161,37 +146,12 @@ func (e *Engine) executeSyncIssues() {
 	for _, r := range results {
 		e.scanMeta[r.IssueID] = r
 
-		if e.deps.IsBucketStale(r.IssueID, e.config.Window, 30*time.Minute) {
-			e.queue.Push(Job{Type: JobFetchBuckets, IssueID: r.IssueID, Priority: 2})
-		}
 		if !e.deps.HasStacktrace(r.IssueID) {
 			e.queue.Push(Job{Type: JobFetchStacktrace, IssueID: r.IssueID, Priority: 3})
 		}
 	}
 
 	e.deps.Publish("scan:complete", map[string]any{"count": len(results)})
-}
-
-// executeFetchBuckets fetches bucket data for an issue and saves it.
-func (e *Engine) executeFetchBuckets(job Job) {
-	meta, ok := e.scanMeta[job.IssueID]
-	if !ok {
-		log.Printf("syncer: no metadata for issue %s, skipping fetch_buckets", job.IssueID)
-		return
-	}
-
-	buckets, err := e.deps.FetchBuckets(job.IssueID, meta.Service, meta.Env, e.config.Window)
-	if err != nil {
-		log.Printf("syncer: FetchBuckets error for %s: %v", job.IssueID, err)
-		return
-	}
-
-	if err := e.deps.SaveBuckets(job.IssueID, buckets, e.config.Window); err != nil {
-		log.Printf("syncer: SaveBuckets error for %s: %v", job.IssueID, err)
-		return
-	}
-
-	e.deps.Publish("issue:updated", map[string]any{"issueID": job.IssueID, "type": "buckets"})
 }
 
 // executeFetchStacktrace fetches a stack trace for an issue and saves it.

@@ -110,7 +110,6 @@ var serveCmd = &cobra.Command{
 
 		engine := syncer.NewEngine(adapter, syncer.EngineConfig{
 			Interval:  interval,
-			Window:    cfg.Scan.Since,
 			RateLimit: rateLimit,
 		})
 

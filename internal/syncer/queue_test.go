@@ -6,7 +6,7 @@ import "testing"
 func TestQueue_PriorityOrdering(t *testing.T) {
 	q := NewJobQueue()
 
-	q.Push(Job{Type: JobFetchBuckets, IssueID: "b", Priority: 2})
+	q.Push(Job{Type: JobResolveCheck, IssueID: "b", Priority: 2})
 	q.Push(Job{Type: JobSyncIssues, Priority: 0})
 	q.Push(Job{Type: JobFetchStacktrace, IssueID: "c", Priority: 3})
 
@@ -16,8 +16,8 @@ func TestQueue_PriorityOrdering(t *testing.T) {
 	}
 
 	second := q.Pop()
-	if second.Type != JobFetchBuckets {
-		t.Errorf("expected fetch_buckets second (priority 2), got %s", second.Type)
+	if second.Type != JobResolveCheck {
+		t.Errorf("expected resolve_check second (priority 2), got %s", second.Type)
 	}
 
 	third := q.Pop()
@@ -37,7 +37,7 @@ func TestQueue_EmptyReturnsZero(t *testing.T) {
 func TestQueue_Len(t *testing.T) {
 	q := NewJobQueue()
 	q.Push(Job{Type: JobSyncIssues})
-	q.Push(Job{Type: JobFetchBuckets, IssueID: "a"})
+	q.Push(Job{Type: JobResolveCheck, IssueID: "a"})
 
 	if q.Len() != 2 {
 		t.Errorf("expected len 2, got %d", q.Len())

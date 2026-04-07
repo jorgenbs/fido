@@ -10,7 +10,6 @@ import (
 
 type mockDeps struct {
 	scanCount   atomic.Int32
-	bucketCount atomic.Int32
 	stackCount  atomic.Int32
 	issues      []ScanResult
 }
@@ -19,17 +18,11 @@ func (m *mockDeps) ScanIssues() ([]ScanResult, error) {
 	m.scanCount.Add(1)
 	return m.issues, nil
 }
-func (m *mockDeps) FetchBuckets(issueID, service, env, window string) ([]BucketData, error) {
-	m.bucketCount.Add(1)
-	return []BucketData{{Timestamp: "2026-04-03T10:00:00Z", Count: 5}}, nil
-}
 func (m *mockDeps) FetchStacktrace(issueID, service, env, firstSeen, lastSeen string) (string, error) {
 	m.stackCount.Add(1)
 	return "stack trace here", nil
 }
-func (m *mockDeps) SaveBuckets(issueID string, buckets []BucketData, window string) error { return nil }
 func (m *mockDeps) SaveStacktrace(issueID, stacktrace string) error                      { return nil }
-func (m *mockDeps) IsBucketStale(issueID, window string, maxAge time.Duration) bool       { return true }
 func (m *mockDeps) HasStacktrace(issueID string) bool                                     { return false }
 func (m *mockDeps) Publish(eventType string, payload map[string]any)                      {}
 
@@ -42,7 +35,6 @@ func TestEngine_RunsAndEnqueuesFollowUpJobs(t *testing.T) {
 
 	eng := NewEngine(deps, EngineConfig{
 		Interval:  100 * time.Millisecond,
-		Window:    "24h",
 		RateLimit: 600,
 	})
 
@@ -56,9 +48,6 @@ func TestEngine_RunsAndEnqueuesFollowUpJobs(t *testing.T) {
 
 	if deps.scanCount.Load() < 2 {
 		t.Errorf("expected at least 2 scans, got %d", deps.scanCount.Load())
-	}
-	if deps.bucketCount.Load() < 1 {
-		t.Errorf("expected at least 1 bucket fetch, got %d", deps.bucketCount.Load())
 	}
 	if deps.stackCount.Load() < 1 {
 		t.Errorf("expected at least 1 stacktrace fetch, got %d", deps.stackCount.Load())
@@ -78,7 +67,6 @@ func TestEngine_RespectsRateLimit(t *testing.T) {
 
 	eng := NewEngine(deps, EngineConfig{
 		Interval:  50 * time.Millisecond,
-		Window:    "24h",
 		RateLimit: 6,
 	})
 
@@ -93,7 +81,7 @@ func TestEngine_RespectsRateLimit(t *testing.T) {
 
 	// 20 issues × 2 follow-ups = 40 jobs. With limit of 3 per 60s,
 	// only ~3 should complete in 200ms.
-	total := deps.bucketCount.Load() + deps.stackCount.Load()
+	total := deps.stackCount.Load()
 	if total >= 20 {
 		t.Errorf("rate limiter not working: %d follow-up jobs completed (expected < 20)", total)
 	}

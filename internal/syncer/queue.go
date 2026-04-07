@@ -11,7 +11,6 @@ type JobType string
 
 const (
 	JobSyncIssues      JobType = "sync_issues"
-	JobFetchBuckets    JobType = "fetch_buckets"
 	JobFetchStacktrace JobType = "fetch_stacktrace"
 	JobResolveCheck    JobType = "resolve_check"
 )
