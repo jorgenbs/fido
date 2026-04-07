@@ -69,15 +69,12 @@ func TestLoad_RateLimitDefaults(t *testing.T) {
 	if cfg.Scan.RateLimit != 30 {
 		t.Errorf("expected default rate limit 30, got %d", cfg.Scan.RateLimit)
 	}
-	if cfg.Scan.ObservationWindow != "24h" {
-		t.Errorf("expected default observation window 24h, got %s", cfg.Scan.ObservationWindow)
-	}
 }
 
 func TestLoad_RateLimitCustom(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")
-	os.WriteFile(cfgPath, []byte("datadog:\n  token: test\nscan:\n  rate_limit: 60\n  observation_window: 48h\n"), 0644)
+	os.WriteFile(cfgPath, []byte("datadog:\n  token: test\nscan:\n  rate_limit: 60\n"), 0644)
 
 	cfg, err := Load(cfgPath)
 	if err != nil {
@@ -85,9 +82,6 @@ func TestLoad_RateLimitCustom(t *testing.T) {
 	}
 	if cfg.Scan.RateLimit != 60 {
 		t.Errorf("expected rate limit 60, got %d", cfg.Scan.RateLimit)
-	}
-	if cfg.Scan.ObservationWindow != "48h" {
-		t.Errorf("expected observation window 48h, got %s", cfg.Scan.ObservationWindow)
 	}
 }
 
