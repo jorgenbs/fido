@@ -110,7 +110,7 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 				} else {
 					log.Printf("[investigate] %s: fetching issue context (traces/stack trace)", issueID)
 				}
-				if issueCtx, err := ddClient.FetchIssueContext(meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
+				if issueCtx, err := ddClient.FetchIssueContext(issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
 					if len(issueCtx.Traces) > 0 {
 						var sb strings.Builder
 						sb.WriteString("## Related Traces\n\n")

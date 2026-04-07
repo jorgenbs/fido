@@ -117,7 +117,7 @@ func TestClient_FetchIssueContext_ReturnsDeepLinks(t *testing.T) {
 		{URL: "http://localhost:0"},
 	})
 
-	ctx, err := c.FetchIssueContext("payment-svc", "production", "2026-03-25T10:00:00Z", "2026-03-26T09:00:00Z")
+	ctx, err := c.FetchIssueContext("test-issue-123", "payment-svc", "production", "2026-03-25T10:00:00Z", "2026-03-26T09:00:00Z")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

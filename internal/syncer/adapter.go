@@ -56,7 +56,7 @@ func (a *Adapter) FetchStacktrace(issueID, service, env, firstSeen, lastSeen str
 		}
 	}
 
-	ctx, err := a.ddClient.FetchIssueContext(service, env, firstSeen, lastSeen)
+	ctx, err := a.ddClient.FetchIssueContext(issueID, service, env, firstSeen, lastSeen)
 	if err != nil {
 		return "", err
 	}

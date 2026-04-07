@@ -189,8 +189,8 @@ type TraceRef struct {
 }
 
 // FetchIssueContext builds deep-link URLs and attempts to fetch sample traces
-// for the given service/env within the time window defined by firstSeen/lastSeen.
-func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (IssueContext, error) {
+// for the given issue. Uses @issue.id to filter spans to the correct error tracking issue.
+func (c *Client) FetchIssueContext(issueID, service, env, firstSeen, lastSeen string) (IssueContext, error) {
 	from, err := time.Parse(time.RFC3339, firstSeen)
 	if err != nil || from.IsZero() {
 		if c.verbose {
@@ -226,7 +226,9 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 		TracesURL: tracesURL,
 	}
 
-	query := fmt.Sprintf("service:%s status:error", service)
+	// Use @issue.id to filter spans to this specific error tracking issue.
+	// Each error span has a custom["issue"]["id"] field set by Datadog Error Tracking.
+	query := fmt.Sprintf("service:%s status:error @issue.id:%s", service, issueID)
 	if env != "" {
 		query += " env:" + env
 	}
@@ -279,23 +281,12 @@ func (c *Client) FetchIssueContext(service, env, firstSeen, lastSeen string) (Is
 
 		if ctx.StackTrace == "" {
 			custom := attrs.GetCustom()
-			if c.verbose {
-				fmt.Fprintf(os.Stderr, "[datadog] span[%d]: custom keys=%v\n", i, mapKeys(custom))
-			}
 			if custom != nil {
-				errVal, hasError := custom["error"]
-				if c.verbose {
-					fmt.Fprintf(os.Stderr, "[datadog] span[%d]: custom[\"error\"] present=%v type=%T value=%v\n",
-						i, hasError, errVal, errVal)
-				}
-				if errMap, ok := errVal.(map[string]interface{}); ok {
-					stackVal := errMap["stack"]
-					if c.verbose {
-						fmt.Fprintf(os.Stderr, "[datadog] span[%d]: error[\"stack\"] type=%T value=%v\n",
-							i, stackVal, stackVal)
-					}
-					if stack, ok := stackVal.(string); ok && stack != "" {
-						ctx.StackTrace = stack
+				if errVal, ok := custom["error"]; ok {
+					if errMap, ok := errVal.(map[string]interface{}); ok {
+						if stack, ok := errMap["stack"].(string); ok && stack != "" {
+							ctx.StackTrace = stack
+						}
 					}
 				}
 			}
