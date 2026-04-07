@@ -74,10 +74,6 @@ var serveCmd = &cobra.Command{
 			}
 			return runFix(issueID, service, cfg, mgr, progress)
 		})
-		handlers.SetImportFunc(func(issueID string) error {
-			return runImport(issueID, cfg, ddClient, mgr)
-		})
-
 		// Start sync engine in background
 		intervalStr := cfg.Scan.Interval
 		if intervalStr == "" {
@@ -114,6 +110,25 @@ var serveCmd = &cobra.Command{
 		engine := syncer.NewEngine(adapter, syncer.EngineConfig{
 			Interval:  interval,
 			RateLimit: rateLimit,
+		})
+
+		// Wire import to enqueue stacktrace fetch immediately
+		handlers.SetImportFunc(func(issueID string) error {
+			if err := runImport(issueID, cfg, ddClient, mgr); err != nil {
+				return err
+			}
+			// Enqueue stacktrace fetch in the sync engine
+			meta, _ := mgr.ReadMetadata(issueID)
+			if meta != nil {
+				engine.EnqueueIssue(syncer.ScanResult{
+					IssueID:   issueID,
+					Service:   meta.Service,
+					Env:       meta.Env,
+					FirstSeen: meta.FirstSeen,
+					LastSeen:  meta.LastSeen,
+				})
+			}
+			return nil
 		})
 
 		// Wire Datadog response headers into the engine's rate limiter.

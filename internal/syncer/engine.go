@@ -67,6 +67,16 @@ func (e *Engine) Limiter() *RateLimiter {
 	return e.limiter
 }
 
+// EnqueueIssue stores metadata for an issue and enqueues follow-up jobs
+// (e.g. stacktrace fetch). Use this when an issue is imported outside
+// the normal scan cycle.
+func (e *Engine) EnqueueIssue(result ScanResult) {
+	e.scanMeta[result.IssueID] = result
+	if !e.deps.HasStacktrace(result.IssueID) {
+		e.queue.Push(Job{Type: JobFetchStacktrace, IssueID: result.IssueID, Priority: 2})
+	}
+}
+
 // Run blocks until ctx is cancelled. It runs an initial sync, starts a worker
 // goroutine to drain the queue, and enqueues sync_issues on each interval tick.
 func (e *Engine) Run(ctx context.Context) {
