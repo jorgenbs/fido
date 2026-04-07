@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   listIssues,
   triggerScan,
+  importIssue,
   triggerInvestigate as apiInvestigate,
   ignoreIssue,
   unignoreIssue,
@@ -35,6 +36,9 @@ export function Dashboard() {
   const [codeFixableOnly, setCodeFixableOnly] = useState(false);
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [actionLoading, setActionLoading] = useState<Record<string, string>>({});
+  const [importId, setImportId] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const { permission, requestPermission, notify } = useNotifications();
   const [bannerDismissed, setBannerDismissed] = useState(() =>
@@ -123,12 +127,31 @@ export function Dashboard() {
           }
         }
         break;
+      case 'issue:imported':
+        fetchIssues(true);
+        break;
     }
   });
 
   const handleScan = async () => {
     await triggerScan();
     await fetchIssues();
+  };
+
+  const handleImport = async () => {
+    const id = importId.trim();
+    if (!id) return;
+    setImportLoading(true);
+    setImportError(null);
+    try {
+      await importIssue(id);
+      setImportId('');
+      await fetchIssues();
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setImportLoading(false);
+    }
   };
 
   const handleIgnore = async (id: string, currentlyIgnored: boolean) => {
@@ -315,11 +338,32 @@ export function Dashboard() {
             />
             Show ignored
           </label>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              placeholder="Datadog issue ID"
+              value={importId}
+              onChange={(e) => { setImportId(e.target.value); setImportError(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleImport(); }}
+              disabled={importLoading}
+              className="h-7 px-2 text-xs rounded border border-border bg-background text-foreground w-48 placeholder:text-muted-foreground"
+            />
+            <Button size="sm" onClick={handleImport} disabled={importLoading || !importId.trim()} className="h-7 text-xs">
+              {importLoading ? 'Importing...' : 'Import'}
+            </Button>
+          </div>
           <Button size="sm" onClick={handleScan} className="h-7 text-xs">
             Scan Now
           </Button>
         </div>
       </div>
+
+      {importError && (
+        <div className="px-4 py-2 bg-red-950/30 border-b border-red-900 text-red-400 text-xs flex items-center justify-between">
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="text-red-400 hover:text-red-300 ml-2">✕</button>
+        </div>
+      )}
 
       <div className={`flex items-center gap-3 px-4 border-b text-xs h-8 ${someSelected ? "bg-blue-950/30 border-blue-900" : "border-transparent"}`}>
         <span className={`font-medium ${someSelected ? "text-blue-300" : "invisible"}`}>
