@@ -36,8 +36,6 @@ type IssueListItem struct {
 	Env         string  `json:"env,omitempty"`
 	DatadogURL  string  `json:"datadog_url,omitempty"`
 	StackTrace  string  `json:"stack_trace,omitempty"`
-	Timeseries []reports.Bucket  `json:"timeseries,omitempty"`
-	Stats      *timeseriesStats  `json:"stats,omitempty"`
 }
 
 type IssueDetail struct {
@@ -111,10 +109,6 @@ func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
 
 func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 	showIgnored := r.URL.Query().Get("show_ignored") == "true"
-	window := r.URL.Query().Get("window")
-	if window == "" {
-		window = "24h"
-	}
 	issues, err := h.reports.ListIssues(showIgnored)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -158,11 +152,6 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 		}
 		if op, ok := h.running.Load(issue.ID); ok {
 			item.RunningOp = op.(string)
-		}
-		if ts, err := h.reports.ReadTimeSeries(issue.ID); err == nil && ts.Window == window {
-			item.Timeseries = ts.Buckets
-			stats := computeTimeseriesStats(ts.Buckets)
-			item.Stats = &stats
 		}
 		items = append(items, item)
 	}
@@ -446,26 +435,6 @@ func (h *Handlers) StreamEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
-}
-
-func (h *Handlers) GetTimeseries(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	if !h.reports.Exists(id) {
-		writeError(w, http.StatusNotFound, "issue not found")
-		return
-	}
-
-	ts, err := h.reports.ReadTimeSeries(id)
-	if err != nil {
-		// No timeseries data yet — return empty
-		writeJSON(w, http.StatusOK, &reports.TimeSeries{
-			Buckets: []reports.Bucket{},
-			Window:  r.URL.Query().Get("window"),
-		})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, ts)
 }
 
 func extractStackTrace(errorContent string) string {
