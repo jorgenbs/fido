@@ -74,6 +74,9 @@ var serveCmd = &cobra.Command{
 			}
 			return runFix(issueID, service, cfg, mgr, progress)
 		})
+		handlers.SetImportFunc(func(issueID string) error {
+			return runImport(issueID, cfg, ddClient, mgr)
+		})
 
 		// Start sync engine in background
 		intervalStr := cfg.Scan.Interval
@@ -96,7 +99,7 @@ var serveCmd = &cobra.Command{
 		if scanErr != nil {
 			return fmt.Errorf("initial scan failed (check your Datadog token): %w", scanErr)
 		}
-		fmt.Printf("Initial scan complete: %d new issues\n", count)
+		fmt.Printf("Initial scan complete: %d issues updated\n", count)
 		hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
 
 		adapter := syncer.NewAdapter(ddClient, mgr, hub, func() ([]syncer.ScanResult, error) {
@@ -104,7 +107,7 @@ var serveCmd = &cobra.Command{
 			if err != nil {
 				return nil, err
 			}
-			fmt.Printf("Background scan complete: %d new issues\n", c)
+			fmt.Printf("Background scan complete: %d issues updated\n", c)
 			return results, nil
 		})
 

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -613,5 +614,67 @@ func TestListIssues_RunningOpIncluded(t *testing.T) {
 	}
 	if resp[0].RunningOp != "fix" {
 		t.Errorf("RunningOp: got %q, want fix", resp[0].RunningOp)
+	}
+}
+
+func TestImportIssue_Success(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	h := NewHandlers(mgr, &config.Config{})
+	h.SetImportFunc(func(issueID string) error {
+		mgr.WriteError(issueID, "imported error")
+		mgr.WriteMetadata(issueID, &reports.MetaData{Title: "TestError", Service: "svc-a"})
+		return nil
+	})
+
+	body := strings.NewReader(`{"issue_id":"issue-new"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/import", body)
+	w := httptest.NewRecorder()
+	h.ImportIssue(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["status"] != "imported" {
+		t.Errorf("expected status=imported, got %q", resp["status"])
+	}
+}
+
+func TestImportIssue_ValidationError(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	h := NewHandlers(mgr, &config.Config{})
+	h.SetImportFunc(func(issueID string) error {
+		return fmt.Errorf("service \"svc-x\" is not configured")
+	})
+
+	body := strings.NewReader(`{"issue_id":"issue-bad"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/import", body)
+	w := httptest.NewRecorder()
+	h.ImportIssue(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestImportIssue_MissingID(t *testing.T) {
+	dir := t.TempDir()
+	mgr := reports.NewManager(dir)
+
+	h := NewHandlers(mgr, &config.Config{})
+
+	body := strings.NewReader(`{}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/import", body)
+	w := httptest.NewRecorder()
+	h.ImportIssue(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }

@@ -36,6 +36,7 @@ func NewServer(mgr *reports.Manager, cfg *config.Config, hub *Hub) *Server {
 		r.Get("/issues/{id}/progress", h.StreamProgress)
 		r.Get("/issues/{id}/mr-status", h.RefreshMRStatus)
 		r.Post("/scan", h.TriggerScan)
+		r.Post("/import", h.ImportIssue)
 		r.Get("/events", h.StreamEvents)
 		r.Post("/debug/event", h.DebugPublishEvent)
 	})

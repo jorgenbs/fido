@@ -53,6 +53,7 @@ type IssueDetail struct {
 type ScanFunc func() error
 type InvestigateFunc func(issueID string, progress io.Writer) error
 type FixFunc func(issueID string, iterate bool, progress io.Writer) error
+type ImportFunc func(issueID string) error
 
 // progressBuf is a thread-safe write buffer for streaming agent output to SSE clients.
 type progressBuf struct {
@@ -79,6 +80,7 @@ type Handlers struct {
 	scanFn        ScanFunc
 	investigateFn InvestigateFunc
 	fixFn         FixFunc
+	importFn      ImportFunc
 	running       sync.Map
 	progressBufs  sync.Map // issueID -> *progressBuf
 }
@@ -106,6 +108,7 @@ func (h *Handlers) DebugPublishEvent(w http.ResponseWriter, r *http.Request) {
 func (h *Handlers) SetScanFunc(fn ScanFunc)              { h.scanFn = fn }
 func (h *Handlers) SetInvestigateFunc(fn InvestigateFunc) { h.investigateFn = fn }
 func (h *Handlers) SetFixFunc(fn FixFunc)                { h.fixFn = fn }
+func (h *Handlers) SetImportFunc(fn ImportFunc)           { h.importFn = fn }
 
 func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 	showIgnored := r.URL.Query().Get("show_ignored") == "true"
@@ -277,6 +280,32 @@ func (h *Handlers) TriggerFix(w http.ResponseWriter, r *http.Request) {
 		h.publish(Event{Type: "issue:updated", Payload: map[string]any{"id": id, "field": "stage", "newValue": "fixed"}})
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
+}
+
+func (h *Handlers) ImportIssue(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IssueID string `json:"issue_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IssueID == "" {
+		writeError(w, http.StatusBadRequest, "issue_id is required")
+		return
+	}
+	if h.importFn == nil {
+		writeError(w, http.StatusNotImplemented, "import not configured")
+		return
+	}
+	if err := h.importFn(req.IssueID); err != nil {
+		if strings.Contains(err.Error(), "already imported") {
+			writeError(w, http.StatusConflict, err.Error())
+		} else if strings.Contains(err.Error(), "not found") {
+			writeError(w, http.StatusNotFound, err.Error())
+		} else {
+			writeError(w, http.StatusBadRequest, err.Error())
+		}
+		return
+	}
+	h.publish(Event{Type: "issue:imported", Payload: map[string]any{"id": req.IssueID}})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "imported", "id": req.IssueID})
 }
 
 func (h *Handlers) TriggerIgnore(w http.ResponseWriter, r *http.Request) {
