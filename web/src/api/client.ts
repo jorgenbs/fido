@@ -79,6 +79,19 @@ export async function triggerScan(): Promise<void> {
   if (!res.ok) throw new Error(`API error: ${res.status}`);
 }
 
+export async function importIssue(issueId: string): Promise<{ status: string; id: string }> {
+  const res = await fetch(`${API_BASE}/api/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ issue_id: issueId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    throw new Error(err.error || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function ignoreIssue(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/api/issues/${encodeURIComponent(id)}/ignore`, {
     method: 'POST',
@@ -115,7 +128,7 @@ export async function fetchMRStatus(id: string): Promise<{ ci_status: string; ci
 }
 
 export interface SSEEvent {
-  type: 'scan:complete' | 'issue:updated' | 'issue:progress';
+  type: 'scan:complete' | 'issue:updated' | 'issue:progress' | 'issue:imported';
   payload: Record<string, any>;
 }
 
