@@ -63,7 +63,7 @@ func newTestScanServer(t *testing.T) *httptest.Server {
 	}))
 }
 
-func TestScanCommand_CreatesErrorReports(t *testing.T) {
+func TestScanCommand_DoesNotCreateNewIssues(t *testing.T) {
 	server := newTestScanServer(t)
 	defer server.Close()
 
@@ -84,39 +84,54 @@ func TestScanCommand_CreatesErrorReports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 1 {
-		t.Errorf("expected 1 new issue, got %d", count)
+	if count != 0 {
+		t.Errorf("expected 0 new issues (scan no longer creates), got %d", count)
 	}
 
-	if !mgr.Exists("issue-1") {
-		t.Error("expected issue-1 report to exist")
+	if mgr.Exists("issue-1") {
+		t.Error("expected issue-1 report to NOT exist (scan no longer creates)")
 	}
-	content, _ := mgr.ReadError("issue-1")
-	if !strings.Contains(content, "NullPointerException") {
-		t.Error("expected error report to contain error title")
+}
+
+func TestScanCommand_UpdatesExistingIssues(t *testing.T) {
+	server := newTestScanServer(t)
+	defer server.Close()
+
+	reportsDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+	ddClient := newTestDDClient(t, server.URL)
+
+	// Pre-create the issue with stale metadata
+	mgr.WriteError("issue-1", "existing error report")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service: "svc-a",
+		Title:   "OldTitle",
+		Count:   1,
+	})
+
+	cfg := &config.Config{
+		Datadog: config.DatadogConfig{
+			Services:     []string{"svc-a"},
+			Site:         "test.datadoghq.com",
+			OrgSubdomain: "myorg",
+		},
+		Scan: config.ScanConfig{Since: "24h"},
 	}
-	if !strings.Contains(content, "myorg") {
-		t.Error("expected error report to contain Datadog links with org subdomain")
+
+	_, err := runScan(cfg, ddClient, mgr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	meta, err := mgr.ReadMetadata("issue-1")
 	if err != nil {
 		t.Fatalf("ReadMetadata: %v", err)
 	}
-	if meta.Service != "svc-a" {
-		t.Errorf("expected service=svc-a, got %q", meta.Service)
-	}
 	if meta.Title != "NullPointerException" {
-		t.Errorf("expected title=NullPointerException, got %q", meta.Title)
+		t.Errorf("expected title updated to NullPointerException, got %q", meta.Title)
 	}
-	if !strings.Contains(meta.DatadogURL, "myorg") {
-		t.Errorf("expected DatadogURL to contain myorg, got %q", meta.DatadogURL)
-	}
-	if !strings.Contains(meta.DatadogEventsURL, "myorg") && meta.DatadogEventsURL != "" {
-		t.Errorf("expected DatadogEventsURL to contain myorg, got %q", meta.DatadogEventsURL)
-	}
-	if !strings.Contains(meta.DatadogTraceURL, "myorg") && meta.DatadogTraceURL != "" {
-		t.Errorf("expected DatadogTraceURL to contain myorg, got %q", meta.DatadogTraceURL)
+	if meta.Count != 10 {
+		t.Errorf("expected count updated to 10, got %d", meta.Count)
 	}
 }
 
@@ -152,6 +167,7 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 	ddClient := newTestDDClient(t, server.URL)
 
 	mgr.WriteError("issue-1", "existing report")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
 
 	cfg := &config.Config{
 		Datadog: config.DatadogConfig{Services: []string{"svc-a"}},
@@ -162,8 +178,8 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if count != 0 {
-		t.Errorf("expected 0 new issues (existing skipped), got %d", count)
+	if count != 1 {
+		t.Errorf("expected 1 updated issue, got %d", count)
 	}
 }
 
