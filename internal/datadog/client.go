@@ -13,12 +13,6 @@ import (
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV2"
 )
 
-// TimelineBucket is a time-bucketed occurrence count.
-type TimelineBucket struct {
-	Timestamp string
-	Count     int64
-}
-
 type Client struct {
 	token        string
 	site         string
@@ -330,122 +324,6 @@ func mapKeys(m map[string]interface{}) []string {
 // OverrideServers replaces the SDK server configuration (used for testing with httptest).
 func (c *Client) OverrideServers(servers datadog.ServerConfigurations) {
 	c.cfg.Servers = servers
-}
-
-// FetchErrorTimeline returns time-bucketed error occurrence counts for the given
-// service within the window specified by since (a Go duration string like "24h").
-// It uses the Spans Aggregate API with a timeseries compute to produce the buckets.
-func (c *Client) FetchErrorTimeline(service, env, since string) ([]TimelineBucket, error) {
-	dur, err := time.ParseDuration(since)
-	if err != nil {
-		return nil, fmt.Errorf("invalid since duration %q: %w", since, err)
-	}
-
-	now := time.Now()
-	from := now.Add(-dur)
-
-	query := fmt.Sprintf("service:%s status:error", service)
-	if env != "" {
-		query += " env:" + env
-	}
-
-	// Choose bucket interval based on window size.
-	interval := "1h"
-	if dur > 7*24*time.Hour {
-		interval = "1d"
-	}
-
-	computeType := datadogV2.SPANSCOMPUTETYPE_TIMESERIES
-	body := datadogV2.SpansAggregateRequest{
-		Data: &datadogV2.SpansAggregateData{
-			Attributes: &datadogV2.SpansAggregateRequestAttributes{
-				Compute: []datadogV2.SpansCompute{
-					{
-						Aggregation: datadogV2.SPANSAGGREGATIONFUNCTION_COUNT,
-						Type:        &computeType,
-						Interval:    datadog.PtrString(interval),
-					},
-				},
-				Filter: &datadogV2.SpansQueryFilter{
-					Query: datadog.PtrString(query),
-					From:  datadog.PtrString(from.Format(time.RFC3339)),
-					To:    datadog.PtrString(now.Format(time.RFC3339)),
-				},
-			},
-			Type: datadogV2.SPANSAGGREGATEREQUESTTYPE_AGGREGATE_REQUEST.Ptr(),
-		},
-	}
-
-	resp, _, err := c.spansAPI.AggregateSpans(c.ctx(), body)
-	if err != nil {
-		return nil, fmt.Errorf("aggregating spans: %w", err)
-	}
-
-	// The Datadog API returns "compute" (singular) but the SDK also supports
-	// "computes" (plural) via GetComputes(). Try the raw "compute" first (real API),
-	// then fall back to the typed "computes" (SDK test servers / future API versions).
-	var buckets []TimelineBucket
-	for _, b := range resp.GetData() {
-		attrs := b.GetAttributes()
-		if parsed := parseComputeRaw(attrs.GetCompute()); len(parsed) > 0 {
-			buckets = append(buckets, parsed...)
-			continue
-		}
-		if parsed := parseComputeTyped(attrs.GetComputes()); len(parsed) > 0 {
-			buckets = append(buckets, parsed...)
-		}
-	}
-
-	return buckets, nil
-}
-
-// parseComputeRaw extracts buckets from the raw "compute" field (map[string]interface{}).
-func parseComputeRaw(compute interface{}) []TimelineBucket {
-	computeMap, ok := compute.(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	c0, ok := computeMap["c0"]
-	if !ok {
-		return nil
-	}
-	points, ok := c0.([]interface{})
-	if !ok {
-		return nil
-	}
-	var buckets []TimelineBucket
-	for _, pt := range points {
-		ptMap, ok := pt.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		ts, _ := ptMap["time"].(string)
-		val, _ := ptMap["value"].(float64)
-		if ts != "" {
-			buckets = append(buckets, TimelineBucket{Timestamp: ts, Count: int64(val)})
-		}
-	}
-	return buckets
-}
-
-// parseComputeTyped extracts buckets from the typed "computes" field.
-func parseComputeTyped(computes map[string]datadogV2.SpansAggregateBucketValue) []TimelineBucket {
-	c0, ok := computes["c0"]
-	if !ok {
-		return nil
-	}
-	switch v := c0.GetActualInstance().(type) {
-	case *datadogV2.SpansAggregateBucketValueTimeseries:
-		var buckets []TimelineBucket
-		for _, pt := range v.Items {
-			buckets = append(buckets, TimelineBucket{
-				Timestamp: pt.GetTime(),
-				Count:     int64(pt.GetValue()),
-			})
-		}
-		return buckets
-	}
-	return nil
 }
 
 func (c *Client) SearchLogs(queryStr, since string) ([]LogEntry, error) {
