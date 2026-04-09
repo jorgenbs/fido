@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ruter-as/fido/internal/config"
+	"github.com/ruter-as/fido/internal/datadog"
 	"github.com/ruter-as/fido/internal/reports"
 )
 
@@ -223,5 +225,171 @@ func TestRunInvestigate_IncludesContextLinks(t *testing.T) {
 	}
 	if !strings.Contains(inv, "https://example.com/traces") {
 		t.Error("expected investigation prompt to contain traces URL")
+	}
+}
+
+// --- formatTraceDetails ---
+
+func TestFormatTraceDetails_WithData(t *testing.T) {
+	td := datadog.TraceDetails{
+		ErrorName:      "ServiceNotAvailableError",
+		ErrorMessage:   "Service is not available at the requested time",
+		ErrorType:      "DRTException",
+		HTTPMethod:     "POST",
+		HTTPURL:        "https://api.sparelabs.com/v1/rides",
+		HTTPStatusCode: 400,
+		ResponseBody:   `{"name":"ServiceNotAvailableError"}`,
+	}
+	got := formatTraceDetails(td)
+	if !strings.Contains(got, "ServiceNotAvailableError") {
+		t.Error("expected ErrorName in output")
+	}
+	if !strings.Contains(got, "POST") {
+		t.Error("expected HTTPMethod in output")
+	}
+	if !strings.Contains(got, "400") {
+		t.Error("expected status code in output")
+	}
+	if !strings.Contains(got, "## Trace Details") {
+		t.Error("expected section heading")
+	}
+}
+
+func TestFormatTraceDetails_Empty(t *testing.T) {
+	got := formatTraceDetails(datadog.TraceDetails{})
+	if got != "" {
+		t.Errorf("expected empty string for zero-value TraceDetails, got %q", got)
+	}
+}
+
+// --- formatFrequency ---
+
+func TestFormatFrequency_WithBuckets(t *testing.T) {
+	onset := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
+	fd := datadog.FrequencyData{
+		Buckets: []datadog.FrequencyBucket{
+			{Date: "2026-03-26", Count: 1},
+			{Date: "2026-04-07", Count: 5},
+		},
+		OnsetTime:      onset,
+		TotalCount:     6,
+		TrendDirection: "increasing",
+	}
+	got := formatFrequency(fd, "v2.4.1")
+	if !strings.Contains(got, "## Error Frequency") {
+		t.Error("expected section heading")
+	}
+	if !strings.Contains(got, "2026-03-26") {
+		t.Error("expected onset date in output")
+	}
+	if !strings.Contains(got, "6 occurrences") {
+		t.Error("expected total count in output")
+	}
+	if !strings.Contains(got, "increasing") {
+		t.Error("expected trend in output")
+	}
+	if !strings.Contains(got, "v2.4.1") {
+		t.Error("expected version in output")
+	}
+	if !strings.Contains(got, "2026-03-26: 1") {
+		t.Error("expected bucket entries in output")
+	}
+}
+
+func TestFormatFrequency_EmptyBuckets(t *testing.T) {
+	got := formatFrequency(datadog.FrequencyData{}, "v1.0")
+	if got != "" {
+		t.Errorf("expected empty string for no buckets, got %q", got)
+	}
+}
+
+func TestFormatFrequency_OmitsEmptyVersion(t *testing.T) {
+	onset := time.Date(2026, 3, 26, 0, 0, 0, 0, time.UTC)
+	fd := datadog.FrequencyData{
+		Buckets:        []datadog.FrequencyBucket{{Date: "2026-03-26", Count: 1}},
+		OnsetTime:      onset,
+		TotalCount:     1,
+		TrendDirection: "stable",
+	}
+	got := formatFrequency(fd, "")
+	if strings.Contains(got, "**Version:**") {
+		t.Error("expected no Version line when version is empty")
+	}
+}
+
+// --- formatRelatedErrors ---
+
+func TestFormatRelatedErrors_WithMatches(t *testing.T) {
+	now := time.Now().UTC()
+	currentFirstSeen := now.Add(-2 * time.Hour).Format(time.RFC3339)
+	matchFirstSeen := now.Add(-2*time.Hour + 30*time.Minute).Format(time.RFC3339) // ±30min — within 1h
+	tooOldFirstSeen := now.Add(-5 * time.Hour).Format(time.RFC3339)
+
+	current := &reports.MetaData{
+		Service:   "svc-a",
+		FirstSeen: currentFirstSeen,
+		Title:     "NullPointerException",
+		Count:     3,
+	}
+
+	allIssues := []reports.IssueSummary{
+		{
+			ID: "issue-current",
+			Meta: &reports.MetaData{
+				Service:   "svc-a",
+				FirstSeen: currentFirstSeen,
+				Title:     "NullPointerException",
+				Count:     3,
+			},
+		},
+		{
+			ID: "issue-match",
+			Meta: &reports.MetaData{
+				Service:   "svc-a",
+				FirstSeen: matchFirstSeen,
+				Title:     "TimeoutException",
+				Message:   "Connection timed out",
+				Count:     5,
+			},
+		},
+		{
+			ID: "issue-diff-service",
+			Meta: &reports.MetaData{
+				Service:   "svc-b",
+				FirstSeen: matchFirstSeen,
+				Title:     "OtherError",
+				Count:     1,
+			},
+		},
+		{
+			ID: "issue-too-old",
+			Meta: &reports.MetaData{
+				Service:   "svc-a",
+				FirstSeen: tooOldFirstSeen,
+				Title:     "AncientError",
+				Count:     1,
+			},
+		},
+	}
+
+	got := formatRelatedErrors("issue-current", current, allIssues)
+	if !strings.Contains(got, "TimeoutException") {
+		t.Error("expected matching issue in output")
+	}
+	if strings.Contains(got, "OtherError") {
+		t.Error("expected different-service issue excluded")
+	}
+	if strings.Contains(got, "AncientError") {
+		t.Error("expected too-old issue excluded")
+	}
+	if strings.Contains(got, "NullPointerException") {
+		t.Error("expected current issue excluded from related errors")
+	}
+}
+
+func TestFormatRelatedErrors_NoMatches(t *testing.T) {
+	got := formatRelatedErrors("issue-1", nil, nil)
+	if got != "" {
+		t.Errorf("expected empty string for nil current, got %q", got)
 	}
 }

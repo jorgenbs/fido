@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ruter-as/fido/internal/agent"
 	"github.com/ruter-as/fido/internal/config"
@@ -251,6 +252,129 @@ func extractServiceFromReport(content string) string {
 		}
 	}
 	return ""
+}
+
+// formatTraceDetails formats a TraceDetails struct into a markdown section.
+// Returns empty string if neither ErrorName nor HTTPMethod is set.
+func formatTraceDetails(td datadog.TraceDetails) string {
+	if td.ErrorName == "" && td.HTTPMethod == "" {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Trace Details\n\n")
+
+	// Error line
+	if td.ErrorName != "" {
+		sb.WriteString("**Error:** ")
+		sb.WriteString(td.ErrorName)
+		if td.ErrorMessage != "" {
+			sb.WriteString(fmt.Sprintf(" — %q", td.ErrorMessage))
+		}
+		if td.ErrorType != "" {
+			sb.WriteString(fmt.Sprintf(" (type: %s)", td.ErrorType))
+		}
+		sb.WriteString("\n")
+	}
+
+	// HTTP line
+	if td.HTTPMethod != "" {
+		sb.WriteString("**HTTP:** ")
+		sb.WriteString(fmt.Sprintf("%s %s", td.HTTPMethod, td.HTTPURL))
+		if td.HTTPStatusCode > 0 {
+			sb.WriteString(fmt.Sprintf(" → %d", td.HTTPStatusCode))
+		}
+		sb.WriteString("\n")
+	}
+
+	// Response body line
+	if td.ResponseBody != "" {
+		sb.WriteString(fmt.Sprintf("**Response Body:** %s\n", td.ResponseBody))
+	}
+
+	return sb.String()
+}
+
+// formatFrequency formats a FrequencyData struct into a markdown section.
+// Returns empty string if there are no buckets.
+func formatFrequency(fd datadog.FrequencyData, version string) string {
+	if len(fd.Buckets) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("## Error Frequency\n\n")
+	sb.WriteString("_This data shows when and how often the error occurs. Use it to narrow the time window for git investigation, but only if the pattern suggests a recent onset. A long-lived error with steady occurrences is unlikely to correlate with recent commits._\n\n")
+
+	onsetDate := fd.OnsetTime.Format("2006-01-02")
+	daySpan := int(time.Since(fd.OnsetTime).Hours()/24) + 1
+	sb.WriteString(fmt.Sprintf("**Summary:** First appeared %s, %d occurrences over %d days, trend: %s\n",
+		onsetDate, fd.TotalCount, daySpan, fd.TrendDirection))
+
+	if version != "" {
+		sb.WriteString(fmt.Sprintf("**Version:** First seen in %s\n", version))
+	}
+
+	sb.WriteString("**Buckets:**\n")
+	parts := make([]string, 0, len(fd.Buckets))
+	for _, b := range fd.Buckets {
+		parts = append(parts, fmt.Sprintf("%s: %d", b.Date, b.Count))
+	}
+	sb.WriteString(strings.Join(parts, " | "))
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// formatRelatedErrors formats related issues (same service, overlapping timeline) into a markdown section.
+// Returns empty string if current is nil or no matching issues found.
+func formatRelatedErrors(currentIssueID string, current *reports.MetaData, allIssues []reports.IssueSummary) string {
+	if current == nil {
+		return ""
+	}
+	currentTime, err := time.Parse(time.RFC3339, current.FirstSeen)
+	if err != nil {
+		return ""
+	}
+
+	var matches []string
+	for _, issue := range allIssues {
+		if issue.ID == currentIssueID {
+			continue
+		}
+		if issue.Meta == nil {
+			continue
+		}
+		if issue.Meta.Service != current.Service {
+			continue
+		}
+		issueTime, err := time.Parse(time.RFC3339, issue.Meta.FirstSeen)
+		if err != nil {
+			continue
+		}
+		diff := currentTime.Sub(issueTime)
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff > time.Hour {
+			continue
+		}
+		firstSeenFmt := issueTime.Format("2006-01-02 15:04")
+		line := fmt.Sprintf("- %s: %s (%s) — first seen %s, %d occurrences",
+			issue.Meta.Title, issue.Meta.Message, issue.Meta.Service, firstSeenFmt, issue.Meta.Count)
+		matches = append(matches, line)
+	}
+
+	if len(matches) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Potentially Related Errors\n\n")
+	sb.WriteString("_These errors were tracked in the same service with overlapping timelines. They may share a root cause, or they may be entirely unrelated. Only pursue connections if the error types or stack traces suggest a shared code path._\n\n")
+	for _, m := range matches {
+		sb.WriteString(m)
+		sb.WriteString("\n")
+	}
+	return sb.String()
 }
 
 func init() {
