@@ -268,6 +268,56 @@ func TestComputeSpikes(t *testing.T) {
 	}
 }
 
+func TestClient_SearchErrorIssues_ExtractsVersionInfo(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"id":   "issue-v",
+					"type": "issues_search_result",
+					"attributes": map[string]interface{}{
+						"total_count": 5,
+					},
+				},
+			},
+			"included": []map[string]interface{}{
+				{
+					"id":   "issue-v",
+					"type": "issue",
+					"attributes": map[string]interface{}{
+						"error_type":          "VersionError",
+						"error_message":       "version mismatch",
+						"service":             "svc-b",
+						"first_seen":          1711339200000,
+						"last_seen":           1711342800000,
+						"state":               "OPEN",
+						"first_seen_version":  "v2.4.1",
+						"last_seen_version":   "v2.4.1",
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	issues, err := client.SearchErrorIssues([]string{"svc-b"}, "24h")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(issues) != 1 {
+		t.Fatalf("expected 1 issue, got %d", len(issues))
+	}
+	if issues[0].Attributes.FirstSeenVersion != "v2.4.1" {
+		t.Errorf("FirstSeenVersion: got %q, want %q", issues[0].Attributes.FirstSeenVersion, "v2.4.1")
+	}
+	if issues[0].Attributes.LastSeenVersion != "v2.4.1" {
+		t.Errorf("LastSeenVersion: got %q, want %q", issues[0].Attributes.LastSeenVersion, "v2.4.1")
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
 	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {

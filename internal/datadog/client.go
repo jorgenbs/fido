@@ -30,15 +30,17 @@ type ErrorIssue struct {
 }
 
 type ErrorIssueAttributes struct {
-	Title      string
-	Message    string
-	Service    string
-	Env        string
-	FirstSeen  string
-	LastSeen   string
-	Count      int64
-	Status     string
-	StackTrace string
+	Title            string
+	Message          string
+	Service          string
+	Env              string
+	FirstSeen        string
+	LastSeen         string
+	Count            int64
+	Status           string
+	StackTrace       string
+	FirstSeenVersion string
+	LastSeenVersion  string
 }
 
 // LogEntry and LogAttributes are kept for the scan template.
@@ -161,6 +163,8 @@ func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssu
 			if ls := da.GetLastSeen(); ls != 0 {
 				issue.Attributes.LastSeen = time.UnixMilli(ls).UTC().Format(time.RFC3339)
 			}
+			issue.Attributes.FirstSeenVersion = da.GetFirstSeenVersion()
+			issue.Attributes.LastSeenVersion = da.GetLastSeenVersion()
 		} else {
 			// Fallback: minimal data from search result
 			issue.Attributes = ErrorIssueAttributes{

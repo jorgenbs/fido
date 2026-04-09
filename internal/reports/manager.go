@@ -44,6 +44,8 @@ type MetaData struct {
 	Confidence       string `json:"confidence,omitempty"`
 	Complexity       string `json:"complexity,omitempty"`
 	CodeFixable      string `json:"code_fixable,omitempty"`
+	FirstSeenVersion string `json:"first_seen_version,omitempty"`
+	LastSeenVersion  string `json:"last_seen_version,omitempty"`
 }
 
 type IssueSummary struct {

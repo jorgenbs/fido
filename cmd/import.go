@@ -114,6 +114,8 @@ func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr
 		DatadogURL:       datadogURL,
 		DatadogEventsURL: eventsURL,
 		DatadogTraceURL:  tracesURL,
+		FirstSeenVersion: found.Attributes.FirstSeenVersion,
+		LastSeenVersion:  found.Attributes.LastSeenVersion,
 	}
 	if err := mgr.WriteMetadata(found.ID, meta); err != nil {
 		return fmt.Errorf("writing metadata: %w", err)

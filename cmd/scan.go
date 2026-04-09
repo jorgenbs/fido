@@ -105,6 +105,8 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 		meta.FirstSeen = issue.Attributes.FirstSeen
 		meta.LastSeen = issue.Attributes.LastSeen
 		meta.Count = issue.Attributes.Count
+		meta.FirstSeenVersion = issue.Attributes.FirstSeenVersion
+		meta.LastSeenVersion = issue.Attributes.LastSeenVersion
 		meta.DatadogURL = datadogURL
 		meta.DatadogEventsURL = eventsURL
 		meta.DatadogTraceURL = tracesURL
@@ -150,6 +152,8 @@ func runScanWithResults(cfg *config.Config, ddClient *datadog.Client, mgr *repor
 		meta.FirstSeen = issue.Attributes.FirstSeen
 		meta.LastSeen = issue.Attributes.LastSeen
 		meta.Count = issue.Attributes.Count
+		meta.FirstSeenVersion = issue.Attributes.FirstSeenVersion
+		meta.LastSeenVersion = issue.Attributes.LastSeenVersion
 		meta.DatadogURL = datadogURL
 		meta.DatadogEventsURL = eventsURL
 		meta.DatadogTraceURL = tracesURL
