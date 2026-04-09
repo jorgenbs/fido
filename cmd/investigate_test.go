@@ -387,6 +387,52 @@ func TestFormatRelatedErrors_WithMatches(t *testing.T) {
 	}
 }
 
+func TestInvestigate_IncludesEnrichmentSections(t *testing.T) {
+	reportsDir := t.TempDir()
+	repoDir := t.TempDir()
+	mgr := reports.NewManager(reportsDir)
+
+	// Create the issue under investigation
+	mgr.WriteError("issue-1", "# Error\n**Service:** svc-a\nDRTException in handler")
+	mgr.WriteMetadata("issue-1", &reports.MetaData{
+		Service:   "svc-a",
+		FirstSeen: "2026-03-26T16:00:00Z",
+		LastSeen:  "2026-03-26T17:00:00Z",
+	})
+
+	// Create a co-occurring issue in the same service
+	mgr.WriteError("issue-2", "# Error\n**Service:** svc-a\nTimeoutException")
+	mgr.WriteMetadata("issue-2", &reports.MetaData{
+		Title:     "TimeoutException",
+		Message:   "Connection timed out",
+		Service:   "svc-a",
+		FirstSeen: "2026-03-26T15:30:00Z",
+		LastSeen:  "2026-03-26T17:00:00Z",
+		Count:     3,
+	})
+
+	// Use "cat" as agent so the prompt becomes the investigation output
+	cfg := &config.Config{
+		Repositories: map[string]config.RepoConfig{"svc-a": {Local: repoDir}},
+		Agent:        config.AgentConfig{Investigate: "cat"},
+	}
+
+	err := runInvestigate("issue-1", "svc-a", cfg, mgr, nil, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	inv, _ := mgr.ReadInvestigation("issue-1")
+
+	// Should include related errors section (issue-2 is same service, within ±1h)
+	if !strings.Contains(inv, "TimeoutException") {
+		t.Error("expected related error TimeoutException in investigation prompt")
+	}
+	if !strings.Contains(inv, "Potentially Related Errors") {
+		t.Error("expected Related Errors section header")
+	}
+}
+
 func TestFormatRelatedErrors_NoMatches(t *testing.T) {
 	got := formatRelatedErrors("issue-1", nil, nil)
 	if got != "" {

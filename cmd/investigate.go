@@ -59,7 +59,7 @@ const investigatePromptTemplate = `You are investigating a production error. Ana
 ## Error Report
 
 %s
-
+%s
 ## Instructions
 
 0. Ensure you are on the latest on main branch
@@ -90,6 +90,8 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		return fmt.Errorf("no error report for issue %s: %w", issueID, err)
 	}
 
+	var issueCtx *datadog.IssueContext
+
 	needsContext := strings.Contains(errorContent, "<!-- TRACES_PENDING -->") || strings.Contains(errorContent, "<!-- STACK_TRACE_PENDING -->")
 	alreadyMissing := strings.Contains(errorContent, "_No stack trace available_")
 	if verbose {
@@ -111,21 +113,22 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 				} else {
 					log.Printf("[investigate] %s: fetching issue context (traces/stack trace)", issueID)
 				}
-				if issueCtx, err := ddClient.FetchIssueContext(issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
-					if len(issueCtx.Traces) > 0 {
+				if fetchedCtx, err := ddClient.FetchIssueContext(issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
+					issueCtx = &fetchedCtx
+					if len(fetchedCtx.Traces) > 0 {
 						var sb strings.Builder
 						sb.WriteString("## Related Traces\n\n")
-						for _, t := range issueCtx.Traces {
+						for _, t := range fetchedCtx.Traces {
 							sb.WriteString(fmt.Sprintf("- [Trace %s](%s)\n", t.TraceID, t.URL))
 						}
 						tracesSection = sb.String()
 					}
-					if issueCtx.StackTrace != "" {
-						stackTraceSection = "```\n" + issueCtx.StackTrace + "\n```"
+					if fetchedCtx.StackTrace != "" {
+						stackTraceSection = "```\n" + fetchedCtx.StackTrace + "\n```"
 					}
 					if verbose {
 						log.Printf("[investigate] %s: context fetch result: traces=%d stackTrace=%v",
-							issueID, len(issueCtx.Traces), issueCtx.StackTrace != "")
+							issueID, len(fetchedCtx.Traces), fetchedCtx.StackTrace != "")
 					}
 				} else {
 					log.Printf("[investigate] %s: fetching issue context (non-fatal): %v", issueID, err)
@@ -141,13 +144,58 @@ func runInvestigate(issueID, service string, cfg *config.Config, mgr *reports.Ma
 		}
 	}
 
+	// Build enrichment sections
+	var enrichment strings.Builder
+
+	// Trace details — reuse existing FetchIssueContext result, or fetch if not done yet
+	if issueCtx == nil && ddClient != nil {
+		if meta, err := mgr.ReadMetadata(issueID); err == nil {
+			if ctx, err := ddClient.FetchIssueContext(issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
+				issueCtx = &ctx
+			}
+		}
+	}
+	if issueCtx != nil {
+		if td := formatTraceDetails(issueCtx.TraceDetails); td != "" {
+			enrichment.WriteString(td)
+			enrichment.WriteString("\n")
+		}
+	}
+
+	// Error frequency
+	if ddClient != nil {
+		if meta, err := mgr.ReadMetadata(issueID); err == nil {
+			if freq, err := ddClient.FetchErrorFrequency(issueID, meta.Service, meta.Env, meta.FirstSeen, meta.LastSeen); err == nil {
+				// Version filtering: only include if first == last and non-empty
+				version := ""
+				if meta.FirstSeenVersion != "" && meta.FirstSeenVersion == meta.LastSeenVersion {
+					version = meta.FirstSeenVersion
+				}
+				if fd := formatFrequency(freq, version); fd != "" {
+					enrichment.WriteString(fd)
+					enrichment.WriteString("\n")
+				}
+			}
+		}
+	}
+
+	// Co-occurring errors (local data only, no API call needed)
+	if meta, err := mgr.ReadMetadata(issueID); err == nil {
+		if allIssues, err := mgr.ListIssues(false); err == nil {
+			if re := formatRelatedErrors(issueID, meta, allIssues); re != "" {
+				enrichment.WriteString(re)
+				enrichment.WriteString("\n")
+			}
+		}
+	}
+
 	log.Printf("[investigate] %s: resolving repo for service %q", issueID, service)
 	repoPath, err := resolveRepoPath(service, cfg)
 	if err != nil {
 		return err
 	}
 
-	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent)
+	prompt := fmt.Sprintf(investigatePromptTemplate, errorContent, enrichment.String())
 
 	log.Printf("[investigate] %s: starting agent %q (repo=%s, error=%d bytes, prompt=%d bytes total)", issueID, cfg.Agent.Investigate, repoPath, len(errorContent), len(prompt))
 	runner := &agent.Runner{Command: cfg.Agent.Investigate, Progress: progress}
