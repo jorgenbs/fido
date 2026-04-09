@@ -129,6 +129,74 @@ func TestClient_FetchIssueContext_ReturnsDeepLinks(t *testing.T) {
 	}
 }
 
+func TestClient_FetchIssueContext_ExtractsTraceDetails(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		resp := map[string]interface{}{
+			"data": []map[string]interface{}{
+				{
+					"type": "spans",
+					"id":   "span-1",
+					"attributes": map[string]interface{}{
+						"trace_id": "abc123",
+						"custom": map[string]interface{}{
+							"error": map[string]interface{}{
+								"name":    "DRTException",
+								"message": "Spare API returned 422",
+								"type":    "com.example.DRTException",
+								"stack":   "DRTException\n  at Foo.bar(Foo.java:42)",
+							},
+							"http": map[string]interface{}{
+								"method":      "POST",
+								"url":         "https://spare.example.com/api/rides",
+								"status_code": float64(422),
+							},
+							"response": map[string]interface{}{
+								"body": "{\"error\":\"unprocessable\"}",
+							},
+						},
+					},
+				},
+			},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	ctx, err := client.FetchIssueContext("issue-xyz", "my-svc", "production", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	td := ctx.TraceDetails
+	if td.ErrorName != "DRTException" {
+		t.Errorf("ErrorName: got %q, want %q", td.ErrorName, "DRTException")
+	}
+	if td.ErrorMessage != "Spare API returned 422" {
+		t.Errorf("ErrorMessage: got %q, want %q", td.ErrorMessage, "Spare API returned 422")
+	}
+	if td.ErrorType != "com.example.DRTException" {
+		t.Errorf("ErrorType: got %q, want %q", td.ErrorType, "com.example.DRTException")
+	}
+	if td.HTTPMethod != "POST" {
+		t.Errorf("HTTPMethod: got %q, want %q", td.HTTPMethod, "POST")
+	}
+	if td.HTTPURL != "https://spare.example.com/api/rides" {
+		t.Errorf("HTTPURL: got %q, want %q", td.HTTPURL, "https://spare.example.com/api/rides")
+	}
+	if td.HTTPStatusCode != 422 {
+		t.Errorf("HTTPStatusCode: got %d, want %d", td.HTTPStatusCode, 422)
+	}
+	if td.ResponseBody != "{\"error\":\"unprocessable\"}" {
+		t.Errorf("ResponseBody: got %q, want %q", td.ResponseBody, "{\"error\":\"unprocessable\"}")
+	}
+	// Also verify StackTrace still works
+	if ctx.StackTrace == "" {
+		t.Error("expected StackTrace to be extracted")
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
 	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {

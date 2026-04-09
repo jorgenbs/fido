@@ -174,12 +174,24 @@ func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssu
 	return issues, nil
 }
 
+// TraceDetails holds error identity and HTTP request info extracted from a span's custom fields.
+type TraceDetails struct {
+	ErrorName      string
+	ErrorMessage   string
+	ErrorType      string
+	HTTPMethod     string
+	HTTPURL        string
+	HTTPStatusCode int
+	ResponseBody   string
+}
+
 // IssueContext holds deep-link URLs, trace references, and a stack trace for a Datadog issue.
 type IssueContext struct {
-	Traces     []TraceRef
-	EventsURL  string
-	TracesURL  string
-	StackTrace string
+	Traces       []TraceRef
+	EventsURL    string
+	TracesURL    string
+	StackTrace   string
+	TraceDetails TraceDetails
 }
 
 // TraceRef is a reference to a single Datadog trace.
@@ -279,13 +291,48 @@ func (c *Client) FetchIssueContext(issueID, service, env, firstSeen, lastSeen st
 		traceURL := fmt.Sprintf("https://%s.%s/apm/trace/%s", c.orgSubdomain, c.site, url.PathEscape(traceID))
 		ctx.Traces = append(ctx.Traces, TraceRef{TraceID: traceID, URL: traceURL})
 
-		if ctx.StackTrace == "" {
-			custom := attrs.GetCustom()
-			if custom != nil {
-				if errVal, ok := custom["error"]; ok {
-					if errMap, ok := errVal.(map[string]interface{}); ok {
+		custom := attrs.GetCustom()
+		if custom != nil {
+			if errVal, ok := custom["error"]; ok {
+				if errMap, ok := errVal.(map[string]interface{}); ok {
+					if ctx.StackTrace == "" {
 						if stack, ok := errMap["stack"].(string); ok && stack != "" {
 							ctx.StackTrace = stack
+						}
+					}
+					if ctx.TraceDetails.ErrorName == "" {
+						if v, ok := errMap["name"].(string); ok {
+							ctx.TraceDetails.ErrorName = v
+						}
+						if v, ok := errMap["message"].(string); ok {
+							ctx.TraceDetails.ErrorMessage = v
+						}
+						if v, ok := errMap["type"].(string); ok {
+							ctx.TraceDetails.ErrorType = v
+						}
+					}
+				}
+			}
+			if ctx.TraceDetails.HTTPMethod == "" {
+				if httpVal, ok := custom["http"]; ok {
+					if httpMap, ok := httpVal.(map[string]interface{}); ok {
+						if v, ok := httpMap["method"].(string); ok {
+							ctx.TraceDetails.HTTPMethod = v
+						}
+						if v, ok := httpMap["url"].(string); ok {
+							ctx.TraceDetails.HTTPURL = v
+						}
+						if v, ok := httpMap["status_code"].(float64); ok {
+							ctx.TraceDetails.HTTPStatusCode = int(v)
+						}
+					}
+				}
+			}
+			if ctx.TraceDetails.ResponseBody == "" {
+				if respVal, ok := custom["response"]; ok {
+					if respMap, ok := respVal.(map[string]interface{}); ok {
+						if v, ok := respMap["body"].(string); ok {
+							ctx.TraceDetails.ResponseBody = v
 						}
 					}
 				}
