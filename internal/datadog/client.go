@@ -348,6 +348,141 @@ func (c *Client) FetchIssueContext(issueID, service, env, firstSeen, lastSeen st
 	return ctx, nil
 }
 
+// FrequencyData holds daily error occurrence counts and trend analysis.
+type FrequencyData struct {
+	Buckets        []FrequencyBucket
+	OnsetTime      time.Time
+	TotalCount     int64
+	SpikeDates     []time.Time
+	TrendDirection string // "increasing", "decreasing", "stable", "single_spike"
+}
+
+// FrequencyBucket is a single day's error count.
+type FrequencyBucket struct {
+	Date  string
+	Count int64
+}
+
+// FetchErrorFrequency retrieves daily error occurrence counts for a given issue
+// over the time range [firstSeen-5m, lastSeen+5m], using the Spans Aggregate API.
+func (c *Client) FetchErrorFrequency(issueID, service, env, firstSeen, lastSeen string) (FrequencyData, error) {
+	from, err := time.Parse(time.RFC3339, firstSeen)
+	if err != nil || from.IsZero() {
+		from = time.Now().UTC().Add(-24 * time.Hour)
+	}
+	to, err2 := time.Parse(time.RFC3339, lastSeen)
+	if err2 != nil || to.IsZero() {
+		to = time.Now().UTC()
+	}
+	from = from.Add(-5 * time.Minute)
+	to = to.Add(5 * time.Minute)
+
+	query := fmt.Sprintf("service:%s status:error @issue.id:%s", service, issueID)
+	if env != "" {
+		query += " env:" + env
+	}
+
+	compType := datadogV2.SPANSCOMPUTETYPE_TIMESERIES
+	reqType := datadogV2.SPANSAGGREGATEREQUESTTYPE_AGGREGATE_REQUEST
+	body := datadogV2.SpansAggregateRequest{
+		Data: &datadogV2.SpansAggregateData{
+			Attributes: &datadogV2.SpansAggregateRequestAttributes{
+				Compute: []datadogV2.SpansCompute{
+					{
+						Aggregation: datadogV2.SPANSAGGREGATIONFUNCTION_COUNT,
+						Type:        &compType,
+						Interval:    datadog.PtrString("1d"),
+					},
+				},
+				Filter: &datadogV2.SpansQueryFilter{
+					Query: datadog.PtrString(query),
+					From:  datadog.PtrString(from.Format(time.RFC3339)),
+					To:    datadog.PtrString(to.Format(time.RFC3339)),
+				},
+			},
+			Type: &reqType,
+		},
+	}
+
+	resp, _, err := c.spansAPI.AggregateSpans(c.ctx(), body)
+	if err != nil {
+		return FrequencyData{}, fmt.Errorf("aggregating spans: %w", err)
+	}
+
+	var result FrequencyData
+	for _, bucket := range resp.GetData() {
+		attrs := bucket.GetAttributes()
+		computes := attrs.GetComputes()
+		for _, val := range computes {
+			ts, ok := val.GetActualInstance().(*datadogV2.SpansAggregateBucketValueTimeseries)
+			if !ok || ts == nil {
+				continue
+			}
+			for _, point := range ts.Items {
+				pointVal := int64(point.GetValue())
+				if pointVal == 0 {
+					continue
+				}
+				pointTimeStr := point.GetTime()
+				pointTime, parseErr := time.Parse(time.RFC3339, pointTimeStr)
+				if parseErr != nil {
+					continue
+				}
+				date := pointTime.Format("2006-01-02")
+				result.Buckets = append(result.Buckets, FrequencyBucket{Date: date, Count: pointVal})
+				result.TotalCount += pointVal
+				if result.OnsetTime.IsZero() || pointTime.Before(result.OnsetTime) {
+					result.OnsetTime = pointTime
+				}
+			}
+		}
+	}
+
+	result.TrendDirection = computeTrend(result.Buckets)
+	result.SpikeDates = computeSpikes(result.Buckets)
+	return result, nil
+}
+
+// computeTrend determines the overall trend direction from frequency buckets.
+func computeTrend(buckets []FrequencyBucket) string {
+	if len(buckets) == 0 {
+		return "stable"
+	}
+	if len(buckets) == 1 {
+		return "single_spike"
+	}
+	first := buckets[0].Count
+	last := buckets[len(buckets)-1].Count
+	if last > first*2 {
+		return "increasing"
+	}
+	if first > last*2 {
+		return "decreasing"
+	}
+	return "stable"
+}
+
+// computeSpikes returns dates where count exceeds 2x the average.
+func computeSpikes(buckets []FrequencyBucket) []time.Time {
+	if len(buckets) < 2 {
+		return nil
+	}
+	var total int64
+	for _, b := range buckets {
+		total += b.Count
+	}
+	avg := float64(total) / float64(len(buckets))
+	var spikes []time.Time
+	for _, b := range buckets {
+		if float64(b.Count) > 2*avg {
+			if t, err := time.Parse("2006-01-02", b.Date); err == nil {
+				spikes = append(spikes, t)
+			}
+		}
+	}
+	return spikes
+}
+
 func mapKeys(m map[string]interface{}) []string {
 	if m == nil {
 		return nil

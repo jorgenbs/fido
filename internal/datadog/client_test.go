@@ -197,6 +197,77 @@ func TestClient_FetchIssueContext_ExtractsTraceDetails(t *testing.T) {
 	}
 }
 
+func TestClient_FetchErrorFrequency(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v2/spans/analytics/aggregate" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		resp := `{"data": [{"id":"bucket-1","type":"aggregate_bucket","attributes":{"computes":{"c0":[{"time":"2026-03-26T00:00:00Z","value":1.0},{"time":"2026-03-27T00:00:00Z","value":0.0},{"time":"2026-04-07T00:00:00Z","value":5.0}]}}}]}`
+		w.Write([]byte(resp))
+	}))
+	defer server.Close()
+
+	client := newTestClient(t, server.URL)
+	freq, err := client.FetchErrorFrequency("issue-123", "my-svc", "production", "2026-03-25T10:00:00Z", "2026-04-08T09:00:00Z")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if freq.TotalCount != 6 {
+		t.Errorf("expected TotalCount=6, got %d", freq.TotalCount)
+	}
+	if len(freq.Buckets) != 2 {
+		t.Errorf("expected 2 buckets (zero-count excluded), got %d", len(freq.Buckets))
+	}
+	if len(freq.Buckets) > 0 && freq.Buckets[0].Date != "2026-03-26" {
+		t.Errorf("expected first bucket date 2026-03-26, got %s", freq.Buckets[0].Date)
+	}
+	if freq.TrendDirection == "" {
+		t.Error("expected TrendDirection to be non-empty")
+	}
+}
+
+func TestComputeTrend(t *testing.T) {
+	tests := []struct {
+		name    string
+		buckets []FrequencyBucket
+		want    string
+	}{
+		{"empty", nil, "stable"},
+		{"single", []FrequencyBucket{{Date: "2026-01-01", Count: 5}}, "single_spike"},
+		{"increasing", []FrequencyBucket{{Date: "2026-01-01", Count: 1}, {Date: "2026-01-02", Count: 10}}, "increasing"},
+		{"decreasing", []FrequencyBucket{{Date: "2026-01-01", Count: 10}, {Date: "2026-01-02", Count: 1}}, "decreasing"},
+		{"stable", []FrequencyBucket{{Date: "2026-01-01", Count: 5}, {Date: "2026-01-02", Count: 5}}, "stable"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := computeTrend(tt.buckets)
+			if got != tt.want {
+				t.Errorf("computeTrend() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComputeSpikes(t *testing.T) {
+	buckets := []FrequencyBucket{
+		{Date: "2026-01-01", Count: 1},
+		{Date: "2026-01-02", Count: 1},
+		{Date: "2026-01-03", Count: 10}, // spike: 10 > 2*avg(4)
+	}
+	spikes := computeSpikes(buckets)
+	if len(spikes) != 1 {
+		t.Fatalf("expected 1 spike, got %d", len(spikes))
+	}
+	if spikes[0].Format("2006-01-02") != "2026-01-03" {
+		t.Errorf("expected spike on 2026-01-03, got %s", spikes[0].Format("2006-01-02"))
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
 	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
 	if err != nil {
