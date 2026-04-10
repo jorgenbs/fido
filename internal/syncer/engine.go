@@ -4,6 +4,7 @@ package syncer
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -17,6 +18,16 @@ type ScanResult struct {
 	HasStacktrace bool
 }
 
+// TrackedIssue is a summary of a tracked issue for resolve_check jobs.
+type TrackedIssue struct {
+	IssueID        string
+	DatadogIssueID string
+	MRStatus       string
+	DatadogStatus  string
+	ResolvedAt     string
+	Ignored        bool
+}
+
 // Deps abstracts the external dependencies the engine needs.
 type Deps interface {
 	ScanIssues() ([]ScanResult, error)
@@ -24,6 +35,13 @@ type Deps interface {
 	SaveStacktrace(issueID, stacktrace string) error
 	HasStacktrace(issueID string) bool
 	Publish(eventType string, payload map[string]any)
+
+	// Resolution lifecycle
+	ListTrackedIssues() ([]TrackedIssue, error)
+	ResolveIssue(datadogIssueID string) error
+	GetIssueStatus(datadogIssueID string) (string, error)
+	SetDatadogStatus(issueID, status, resolvedAt string) error
+	IncrementRegressionCount(issueID string) error
 }
 
 // EngineConfig holds runtime settings.
@@ -135,10 +153,8 @@ func (e *Engine) worker(ctx context.Context) {
 			}
 			e.executeFetchStacktrace(job)
 		case JobResolveCheck:
-			if err := e.limiter.WaitContext(ctx); err != nil {
-				return
-			}
-			log.Printf("syncer: resolve_check for issue %s: not yet implemented", job.IssueID)
+			// resolve_check processes all tracked issues, not individual ones
+			e.executeResolveCheck()
 		default:
 			log.Printf("syncer: unknown job type %q, skipping", job.Type)
 		}
@@ -184,4 +200,67 @@ func (e *Engine) executeFetchStacktrace(job Job) {
 	}
 
 	e.deps.Publish("issue:updated", map[string]any{"issueID": job.IssueID, "type": "stacktrace"})
+}
+
+// executeResolveCheck runs the resolution lifecycle logic for all tracked issues.
+func (e *Engine) executeResolveCheck() {
+	issues, err := e.deps.ListTrackedIssues()
+	if err != nil {
+		log.Printf("syncer: ListTrackedIssues error: %v", err)
+		return
+	}
+
+	for _, issue := range issues {
+		if issue.Ignored {
+			continue
+		}
+		if issue.DatadogIssueID == "" {
+			continue
+		}
+
+		// Step 1: MR merge -> resolve in Datadog (once per fix cycle)
+		if issue.MRStatus == "merged" && issue.ResolvedAt == "" {
+			if err := e.deps.ResolveIssue(issue.DatadogIssueID); err != nil {
+				log.Printf("syncer: ResolveIssue error for %s: %v", issue.IssueID, err)
+				continue
+			}
+			now := time.Now().UTC().Format(time.RFC3339)
+			if err := e.deps.SetDatadogStatus(issue.IssueID, "resolved", now); err != nil {
+				log.Printf("syncer: SetDatadogStatus error for %s: %v", issue.IssueID, err)
+			}
+			e.deps.Publish("issue:resolved", map[string]any{"id": issue.IssueID})
+			continue // skip status check this cycle
+		}
+
+		// Step 2: Check current Datadog status
+		ddStatus, err := e.deps.GetIssueStatus(issue.DatadogIssueID)
+		if err != nil {
+			log.Printf("syncer: GetIssueStatus error for %s: %v", issue.IssueID, err)
+			continue
+		}
+
+		normalizedStatus := strings.ToLower(ddStatus)
+		storedStatus := strings.ToLower(issue.DatadogStatus)
+
+		if normalizedStatus == storedStatus {
+			continue
+		}
+
+		// Status diverged
+		isRegression := storedStatus == "resolved" && (normalizedStatus == "open" || normalizedStatus == "for_review")
+		if isRegression {
+			if err := e.deps.IncrementRegressionCount(issue.IssueID); err != nil {
+				log.Printf("syncer: IncrementRegressionCount error for %s: %v", issue.IssueID, err)
+			}
+			if err := e.deps.SetDatadogStatus(issue.IssueID, normalizedStatus, ""); err != nil {
+				log.Printf("syncer: SetDatadogStatus error for %s: %v", issue.IssueID, err)
+			}
+			e.deps.Publish("issue:regression", map[string]any{"id": issue.IssueID})
+		} else {
+			if err := e.deps.SetDatadogStatus(issue.IssueID, normalizedStatus, ""); err != nil {
+				log.Printf("syncer: SetDatadogStatus error for %s: %v", issue.IssueID, err)
+			}
+			e.deps.Publish("issue:status_changed", map[string]any{"id": issue.IssueID, "status": normalizedStatus})
+		}
+	}
 }

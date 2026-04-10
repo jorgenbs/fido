@@ -104,3 +104,28 @@ func (a *Adapter) Publish(eventType string, payload map[string]any) {
 		a.hub.Publish(api.Event{Type: eventType, Payload: payload})
 	}
 }
+
+func (a *Adapter) ListTrackedIssues() ([]TrackedIssue, error) {
+	// TODO: implement with reports manager
+	return nil, nil
+}
+
+func (a *Adapter) ResolveIssue(datadogIssueID string) error {
+	// TODO: implement with Datadog client
+	return nil
+}
+
+func (a *Adapter) GetIssueStatus(datadogIssueID string) (string, error) {
+	// TODO: implement with Datadog client
+	return "", nil
+}
+
+func (a *Adapter) SetDatadogStatus(issueID, status, resolvedAt string) error {
+	// TODO: implement with reports manager
+	return nil
+}
+
+func (a *Adapter) IncrementRegressionCount(issueID string) error {
+	// TODO: implement with reports manager
+	return nil
+}
