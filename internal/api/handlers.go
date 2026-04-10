@@ -32,10 +32,12 @@ type IssueListItem struct {
 	Confidence  string  `json:"confidence,omitempty"`
 	Complexity  string  `json:"complexity,omitempty"`
 	CodeFixable string  `json:"code_fixable,omitempty"`
-	RunningOp   string  `json:"running_op,omitempty"`
-	Env         string  `json:"env,omitempty"`
-	DatadogURL  string  `json:"datadog_url,omitempty"`
-	StackTrace  string  `json:"stack_trace,omitempty"`
+	RunningOp       string  `json:"running_op,omitempty"`
+	Env             string  `json:"env,omitempty"`
+	DatadogURL      string  `json:"datadog_url,omitempty"`
+	StackTrace      string  `json:"stack_trace,omitempty"`
+	DatadogStatus   string  `json:"datadog_status,omitempty"`
+	RegressionCount int     `json:"regression_count,omitempty"`
 }
 
 type IssueDetail struct {
@@ -45,9 +47,11 @@ type IssueDetail struct {
 	Investigation *string              `json:"investigation"`
 	Fix           *string              `json:"fix"`
 	Resolve       *reports.ResolveData `json:"resolve"`
-	CIStatus      string               `json:"ci_status,omitempty"`
-	CIURL         string               `json:"ci_url,omitempty"`
-	RunningOp     string               `json:"running_op,omitempty"`
+	CIStatus        string               `json:"ci_status,omitempty"`
+	CIURL           string               `json:"ci_url,omitempty"`
+	RunningOp       string               `json:"running_op,omitempty"`
+	DatadogStatus   string               `json:"datadog_status,omitempty"`
+	RegressionCount int                  `json:"regression_count,omitempty"`
 }
 
 type ScanFunc func() error
@@ -141,8 +145,10 @@ func (h *Handlers) ListIssues(w http.ResponseWriter, r *http.Request) {
 			item.Confidence  = issue.Meta.Confidence
 			item.Complexity  = issue.Meta.Complexity
 			item.CodeFixable = issue.Meta.CodeFixable
-			item.Env         = issue.Meta.Env
-			item.DatadogURL  = issue.Meta.DatadogURL
+			item.Env             = issue.Meta.Env
+			item.DatadogURL      = issue.Meta.DatadogURL
+			item.DatadogStatus   = issue.Meta.DatadogStatus
+			item.RegressionCount = issue.Meta.RegressionCount
 		}
 		if errContent, err := h.reports.ReadError(issue.ID); err == nil {
 			item.StackTrace = extractStackTrace(errContent)
@@ -189,6 +195,8 @@ func (h *Handlers) GetIssue(w http.ResponseWriter, r *http.Request) {
 	if meta, err := h.reports.ReadMetadata(id); err == nil {
 		detail.CIStatus = meta.CIStatus
 		detail.CIURL = meta.CIURL
+		detail.DatadogStatus = meta.DatadogStatus
+		detail.RegressionCount = meta.RegressionCount
 	}
 	if detail.Resolve != nil && detail.Resolve.MRStatus == "merged" {
 		detail.CIStatus = "merged"
