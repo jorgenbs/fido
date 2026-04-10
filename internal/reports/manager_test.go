@@ -356,6 +356,97 @@ func TestManager_SetCIStatus_PreservesOtherFields(t *testing.T) {
 	}
 }
 
+func TestManager_MetaData_ResolutionFields(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteError("issue-1", "error")
+
+	meta := &MetaData{
+		Title:           "TestError",
+		Service:         "svc-a",
+		DatadogStatus:   "for_review",
+		ResolvedAt:      "",
+		RegressionCount: 0,
+	}
+	if err := m.WriteMetadata("issue-1", meta); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := m.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DatadogStatus != "for_review" {
+		t.Errorf("expected for_review, got %s", got.DatadogStatus)
+	}
+	if got.RegressionCount != 0 {
+		t.Errorf("expected 0, got %d", got.RegressionCount)
+	}
+
+	// Update resolution fields
+	got.DatadogStatus = "resolved"
+	got.ResolvedAt = "2026-04-10T12:00:00Z"
+	got.RegressionCount = 1
+	if err := m.WriteMetadata("issue-1", got); err != nil {
+		t.Fatal(err)
+	}
+
+	got2, err := m.ReadMetadata("issue-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got2.DatadogStatus != "resolved" {
+		t.Errorf("expected resolved, got %s", got2.DatadogStatus)
+	}
+	if got2.ResolvedAt != "2026-04-10T12:00:00Z" {
+		t.Errorf("expected resolved_at, got %s", got2.ResolvedAt)
+	}
+	if got2.RegressionCount != 1 {
+		t.Errorf("expected 1, got %d", got2.RegressionCount)
+	}
+}
+
+func TestManager_SetDatadogStatus(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteError("issue-1", "error")
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a"})
+
+	if err := m.SetDatadogStatus("issue-1", "resolved", "2026-04-10T12:00:00Z"); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := m.ReadMetadata("issue-1")
+	if meta.DatadogStatus != "resolved" {
+		t.Errorf("expected resolved, got %s", meta.DatadogStatus)
+	}
+	if meta.ResolvedAt != "2026-04-10T12:00:00Z" {
+		t.Errorf("expected resolved_at set, got %s", meta.ResolvedAt)
+	}
+}
+
+func TestManager_IncrementRegressionCount(t *testing.T) {
+	dir := t.TempDir()
+	m := NewManager(dir)
+	m.WriteError("issue-1", "error")
+	m.WriteMetadata("issue-1", &MetaData{Service: "svc-a", RegressionCount: 0})
+
+	if err := m.IncrementRegressionCount("issue-1"); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ := m.ReadMetadata("issue-1")
+	if meta.RegressionCount != 1 {
+		t.Errorf("expected 1, got %d", meta.RegressionCount)
+	}
+
+	if err := m.IncrementRegressionCount("issue-1"); err != nil {
+		t.Fatal(err)
+	}
+	meta, _ = m.ReadMetadata("issue-1")
+	if meta.RegressionCount != 2 {
+		t.Errorf("expected 2, got %d", meta.RegressionCount)
+	}
+}
+
 func TestManager_SetMRStatus(t *testing.T) {
 	dir := t.TempDir()
 	m := NewManager(dir)

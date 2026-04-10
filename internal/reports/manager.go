@@ -46,6 +46,9 @@ type MetaData struct {
 	CodeFixable      string `json:"code_fixable,omitempty"`
 	FirstSeenVersion string `json:"first_seen_version,omitempty"`
 	LastSeenVersion  string `json:"last_seen_version,omitempty"`
+	DatadogStatus    string `json:"datadog_status,omitempty"`
+	ResolvedAt       string `json:"resolved_at,omitempty"`
+	RegressionCount  int    `json:"regression_count,omitempty"`
 }
 
 type IssueSummary struct {
@@ -203,6 +206,27 @@ func (m *Manager) SetCIStatus(issueID, status, ciURL string) error {
 	}
 	meta.CIStatus = status
 	meta.CIURL = ciURL
+	return m.WriteMetadata(issueID, meta)
+}
+
+func (m *Manager) SetDatadogStatus(issueID, status, resolvedAt string) error {
+	meta, err := m.ReadMetadata(issueID)
+	if err != nil {
+		return fmt.Errorf("reading metadata: %w", err)
+	}
+	meta.DatadogStatus = status
+	if resolvedAt != "" {
+		meta.ResolvedAt = resolvedAt
+	}
+	return m.WriteMetadata(issueID, meta)
+}
+
+func (m *Manager) IncrementRegressionCount(issueID string) error {
+	meta, err := m.ReadMetadata(issueID)
+	if err != nil {
+		return fmt.Errorf("reading metadata: %w", err)
+	}
+	meta.RegressionCount++
 	return m.WriteMetadata(issueID, meta)
 }
 
