@@ -498,6 +498,31 @@ func mapKeys(m map[string]interface{}) []string {
 	return keys
 }
 
+// ResolveIssue marks an error tracking issue as resolved in Datadog.
+func (c *Client) ResolveIssue(issueID string) error {
+	attrs := datadogV2.NewIssueUpdateStateRequestDataAttributes(datadogV2.ISSUESTATE_RESOLVED)
+	data := datadogV2.NewIssueUpdateStateRequestData(*attrs, issueID, datadogV2.ISSUEUPDATESTATEREQUESTDATATYPE_ERROR_TRACKING_ISSUE)
+	body := datadogV2.IssueUpdateStateRequest{Data: *data}
+
+	_, _, err := c.api.UpdateIssueState(c.ctx(), issueID, body)
+	if err != nil {
+		return fmt.Errorf("resolving issue %s: %w", issueID, err)
+	}
+	return nil
+}
+
+// GetIssueStatus fetches the current state of a Datadog error tracking issue.
+// Returns the state string (e.g. "OPEN", "RESOLVED", "ACKNOWLEDGED").
+func (c *Client) GetIssueStatus(issueID string) (string, error) {
+	resp, _, err := c.api.GetIssue(c.ctx(), issueID)
+	if err != nil {
+		return "", fmt.Errorf("getting issue %s: %w", issueID, err)
+	}
+	data := resp.GetData()
+	attrs := data.GetAttributes()
+	return string(attrs.GetState()), nil
+}
+
 // OverrideServers replaces the SDK server configuration (used for testing with httptest).
 func (c *Client) OverrideServers(servers datadog.ServerConfigurations) {
 	c.cfg.Servers = servers

@@ -2,9 +2,11 @@ package datadog
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadog"
@@ -315,6 +317,70 @@ func TestClient_SearchErrorIssues_ExtractsVersionInfo(t *testing.T) {
 	}
 	if issues[0].Attributes.LastSeenVersion != "v2.4.1" {
 		t.Errorf("LastSeenVersion: got %q, want %q", issues[0].Attributes.LastSeenVersion, "v2.4.1")
+	}
+}
+
+func TestClient_ResolveIssue(t *testing.T) {
+	var receivedMethod, receivedPath string
+	var receivedBody []byte
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(200)
+		fmt.Fprintf(w, `{"data":{"id":"abc123","type":"error_tracking_issue","attributes":{"state":"RESOLVED"}}}`)
+	}))
+	defer ts.Close()
+
+	client, err := NewClient("test-token", "datadoghq.com", "myorg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.OverrideServers(datadog.ServerConfigurations{
+		{URL: ts.URL, Description: "test"},
+	})
+
+	if err := client.ResolveIssue("abc123"); err != nil {
+		t.Fatalf("ResolveIssue failed: %v", err)
+	}
+
+	if receivedMethod != "PUT" {
+		t.Errorf("expected PUT, got %s", receivedMethod)
+	}
+	if !strings.Contains(receivedPath, "/abc123/state") {
+		t.Errorf("expected path containing /abc123/state, got %s", receivedPath)
+	}
+	if !strings.Contains(string(receivedBody), `"RESOLVED"`) {
+		t.Errorf("expected body to contain RESOLVED, got %s", receivedBody)
+	}
+}
+
+func TestClient_GetIssueStatus(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":{"id":"abc123","type":"error_tracking_issue","attributes":{"state":"OPEN","error_type":"RuntimeError","service":"my-svc"}}}`)
+	}))
+	defer ts.Close()
+
+	client, err := NewClient("test-token", "datadoghq.com", "myorg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.OverrideServers(datadog.ServerConfigurations{
+		{URL: ts.URL, Description: "test"},
+	})
+
+	status, err := client.GetIssueStatus("abc123")
+	if err != nil {
+		t.Fatalf("GetIssueStatus failed: %v", err)
+	}
+	if status != "OPEN" {
+		t.Errorf("expected OPEN, got %s", status)
 	}
 }
 
