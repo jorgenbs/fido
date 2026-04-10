@@ -47,7 +47,9 @@ func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr
 
 	// Fetch all issues for configured services, then find the one we want.
 	// The Datadog error tracking API searches by service, not by issue ID directly.
-	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, cfg.Scan.Since)
+	// Use a wide time window for import — the user is requesting a specific issue
+	// that may be older than the default scan window.
+	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, "8760h")
 	if err != nil {
 		return fmt.Errorf("searching Datadog: %w", err)
 	}
