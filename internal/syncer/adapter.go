@@ -106,26 +106,46 @@ func (a *Adapter) Publish(eventType string, payload map[string]any) {
 }
 
 func (a *Adapter) ListTrackedIssues() ([]TrackedIssue, error) {
-	// TODO: implement with reports manager
-	return nil, nil
+	issues, err := a.mgr.ListIssues(false)
+	if err != nil {
+		return nil, err
+	}
+
+	var tracked []TrackedIssue
+	for _, issue := range issues {
+		ti := TrackedIssue{
+			IssueID: issue.ID,
+		}
+		if issue.Meta != nil {
+			ti.DatadogStatus = issue.Meta.DatadogStatus
+			ti.ResolvedAt = issue.Meta.ResolvedAt
+			ti.Ignored = issue.Meta.Ignored
+		}
+		if resolve, err := a.mgr.ReadResolve(issue.ID); err == nil {
+			ti.MRStatus = resolve.MRStatus
+			ti.DatadogIssueID = resolve.DatadogIssueID
+		}
+		// Fall back to using the issue ID as the Datadog issue ID
+		if ti.DatadogIssueID == "" {
+			ti.DatadogIssueID = issue.ID
+		}
+		tracked = append(tracked, ti)
+	}
+	return tracked, nil
 }
 
 func (a *Adapter) ResolveIssue(datadogIssueID string) error {
-	// TODO: implement with Datadog client
-	return nil
+	return a.ddClient.ResolveIssue(datadogIssueID)
 }
 
 func (a *Adapter) GetIssueStatus(datadogIssueID string) (string, error) {
-	// TODO: implement with Datadog client
-	return "", nil
+	return a.ddClient.GetIssueStatus(datadogIssueID)
 }
 
 func (a *Adapter) SetDatadogStatus(issueID, status, resolvedAt string) error {
-	// TODO: implement with reports manager
-	return nil
+	return a.mgr.SetDatadogStatus(issueID, status, resolvedAt)
 }
 
 func (a *Adapter) IncrementRegressionCount(issueID string) error {
-	// TODO: implement with reports manager
-	return nil
+	return a.mgr.IncrementRegressionCount(issueID)
 }

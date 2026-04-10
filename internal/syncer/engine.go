@@ -177,6 +177,9 @@ func (e *Engine) executeSyncIssues() {
 		}
 	}
 
+	// Enqueue resolve_check to run after stacktrace fetches
+	e.queue.Push(Job{Type: JobResolveCheck, Priority: 4})
+
 	e.deps.Publish("scan:complete", map[string]any{"count": len(results)})
 }
 
