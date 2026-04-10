@@ -19,6 +19,8 @@ export interface IssueListItem {
   running_op?: 'investigate' | 'fix';
   datadog_url: string;
   stack_trace: string;
+  datadog_status: string;
+  regression_count: number;
 }
 
 export interface ResolveData {
@@ -41,6 +43,8 @@ export interface IssueDetail {
   ci_status: string;
   ci_url: string;
   running_op?: 'investigate' | 'fix';
+  datadog_status: string;
+  regression_count: number;
 }
 
 export async function listIssues(status?: string, showIgnored?: boolean): Promise<IssueListItem[]> {
@@ -128,7 +132,7 @@ export async function fetchMRStatus(id: string): Promise<{ ci_status: string; ci
 }
 
 export interface SSEEvent {
-  type: 'scan:complete' | 'issue:updated' | 'issue:progress' | 'issue:imported';
+  type: 'scan:complete' | 'issue:updated' | 'issue:progress' | 'issue:imported' | 'issue:resolved' | 'issue:regression' | 'issue:status_changed';
   payload: Record<string, any>;
 }
 

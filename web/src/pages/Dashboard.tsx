@@ -16,6 +16,7 @@ import { NotificationBanner } from '../components/NotificationBanner';
 import { StageIndicator } from '../components/StageIndicator';
 import { CIStatusBadge } from '../components/CIStatusBadge';
 import { InvestigationBadge } from '../components/InvestigationBadge';
+import { DatadogStatusBadge } from '../components/DatadogStatusBadge';
 import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -130,6 +131,29 @@ export function Dashboard() {
       case 'issue:imported':
         fetchIssues(true);
         break;
+      case 'issue:resolved':
+      case 'issue:regression':
+      case 'issue:status_changed': {
+        if (id) {
+          fetchIssues(true);
+          setHighlightedIds(prev => new Set(prev).add(id));
+          setTimeout(() => {
+            setHighlightedIds(prev => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }, 3000);
+
+          const goToIssue = () => navigate(`/issues/${id}`);
+          if (event.type === 'issue:regression') {
+            notify('Regression detected', { body: `Issue ${id} has regressed`, onClick: goToIssue });
+          } else if (event.type === 'issue:resolved') {
+            notify('Issue resolved', { body: `Issue ${id} marked resolved in Datadog`, onClick: goToIssue });
+          }
+        }
+        break;
+      }
     }
   });
 
@@ -207,6 +231,10 @@ export function Dashboard() {
     if (complexityFilter !== 'all' && issue.complexity.toLowerCase() !== complexityFilter.toLowerCase()) return false;
     if (codeFixableOnly && issue.code_fixable !== 'Yes') return false;
     return true;
+  }).sort((a, b) => {
+    const aRegression = a.regression_count > 0 && (a.datadog_status === 'open' || a.datadog_status === 'for_review') ? 1 : 0;
+    const bRegression = b.regression_count > 0 && (b.datadog_status === 'open' || b.datadog_status === 'for_review') ? 1 : 0;
+    return bRegression - aRegression;
   });
 
   const allSelected = filteredIssues.length > 0 && filteredIssues.every(i => selectedIds.has(i.id));
@@ -397,7 +425,7 @@ export function Dashboard() {
       ) : (
         <div>
           {/* Header row */}
-          <div className="grid grid-cols-[32px_2fr_1fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
+          <div className="grid grid-cols-[32px_2fr_1fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr_0.6fr] px-4 py-2 bg-muted/50 text-xs font-semibold text-muted-foreground tracking-wide uppercase border-b border-border">
             <span>
               <Checkbox
                 checked={allSelected}
@@ -414,13 +442,14 @@ export function Dashboard() {
             <span>Fixable</span>
             <span>CI</span>
             <span>MR</span>
+            <span>DD Status</span>
           </div>
 
           {filteredIssues.map((issue) => (
             <div key={issue.id} className="border-b border-border">
               {/* Main row */}
               <div
-                className={`grid grid-cols-[32px_2fr_1fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : ''}`}
+                className={`grid grid-cols-[32px_2fr_1fr_0.6fr_0.6fr_0.5fr_0.5fr_0.6fr_0.6fr_0.6fr] px-4 py-3 items-center cursor-pointer hover:bg-muted/20 transition-all duration-500 ${selectedIds.has(issue.id) ? 'bg-blue-950/30' : ''} ${highlightedIds.has(issue.id) ? 'bg-yellow-500/20 ring-1 ring-yellow-500/30' : ''}`}
                 onClick={() => toggleRow(issue.id)}
               >
                 <span
@@ -486,6 +515,9 @@ export function Dashboard() {
                   ) : (
                     <span className="text-muted-foreground text-xs">—</span>
                   )}
+                </span>
+                <span>
+                  <DatadogStatusBadge status={issue.datadog_status} regressionCount={issue.regression_count} />
                 </span>
               </div>
 
