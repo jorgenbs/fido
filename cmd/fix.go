@@ -60,7 +60,7 @@ const fixPromptTemplate = `You are fixing a production error. Use the error repo
 
 ## Instructions
 
-0. Ensure you are on the latest main/master branch
+0. Check that you are on the latest of the remote default branch of the repository
 1. Create a new branch: fix/%s-<short-description>
 2. Implement the fix described in the investigation
 3. Commit with conventional commit message: fix(<service>): <description>
