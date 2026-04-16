@@ -122,5 +122,38 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	// Validate that no service name appears in multiple Datadog configs.
+	seen := make(map[string]string) // service → config name
+	for _, dd := range cfg.Datadog {
+		for _, svc := range dd.Services {
+			if prev, exists := seen[svc]; exists {
+				return nil, fmt.Errorf("service %q appears in multiple datadog configs: %q and %q", svc, prev, dd.Name)
+			}
+			seen[svc] = dd.Name
+		}
+	}
+
 	return cfg, nil
+}
+
+// AllServices returns a flattened list of all service names across all Datadog configs.
+func (dc DatadogConfigs) AllServices() []string {
+	var services []string
+	for _, dd := range dc {
+		services = append(services, dd.Services...)
+	}
+	return services
+}
+
+// ForService returns a pointer to the DatadogConfig that owns the given service name,
+// or nil if the service is not found in any config.
+func (dc DatadogConfigs) ForService(service string) *DatadogConfig {
+	for i := range dc {
+		for _, svc := range dc[i].Services {
+			if svc == service {
+				return &dc[i]
+			}
+		}
+	}
+	return nil
 }

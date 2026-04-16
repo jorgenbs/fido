@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -211,5 +212,86 @@ datadog:
 	// Default org_subdomain should be applied.
 	if staging.OrgSubdomain != "app" {
 		t.Errorf("expected default org_subdomain 'app' for staging, got %q", staging.OrgSubdomain)
+	}
+}
+
+func TestDatadogConfigs_AllServices(t *testing.T) {
+	configs := DatadogConfigs{
+		{Name: "work", Services: []string{"svc-a", "svc-b"}},
+		{Name: "personal", Services: []string{"svc-c", "svc-d"}},
+	}
+
+	got := configs.AllServices()
+
+	want := []string{"svc-a", "svc-b", "svc-c", "svc-d"}
+	if len(got) != len(want) {
+		t.Fatalf("expected %d services, got %d: %v", len(want), len(got), got)
+	}
+	for i, svc := range want {
+		if got[i] != svc {
+			t.Errorf("position %d: expected %q, got %q", i, svc, got[i])
+		}
+	}
+}
+
+func TestDatadogConfigs_ForService(t *testing.T) {
+	configs := DatadogConfigs{
+		{Name: "work", Services: []string{"svc-a", "svc-b"}},
+		{Name: "personal", Services: []string{"svc-c", "svc-d"}},
+	}
+
+	// Service in second config.
+	got := configs.ForService("svc-c")
+	if got == nil {
+		t.Fatal("expected non-nil config for 'svc-c'")
+	}
+	if got.Name != "personal" {
+		t.Errorf("expected config name 'personal', got %q", got.Name)
+	}
+
+	// Service in first config.
+	got = configs.ForService("svc-a")
+	if got == nil {
+		t.Fatal("expected non-nil config for 'svc-a'")
+	}
+	if got.Name != "work" {
+		t.Errorf("expected config name 'work', got %q", got.Name)
+	}
+
+	// Unknown service returns nil.
+	got = configs.ForService("does-not-exist")
+	if got != nil {
+		t.Errorf("expected nil for unknown service, got %+v", got)
+	}
+}
+
+func TestLoad_DuplicateServicesAcrossConfigs(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yml")
+
+	content := `
+datadog:
+  work:
+    token: "work-token"
+    services:
+      - "svc-overlap"
+      - "svc-unique-work"
+  personal:
+    token: "personal-token"
+    services:
+      - "svc-overlap"
+      - "svc-unique-personal"
+`
+	os.WriteFile(cfgPath, []byte(content), 0644)
+
+	_, err := Load(cfgPath)
+	if err == nil {
+		t.Fatal("expected error for duplicate service across configs, got nil")
+	}
+	if !strings.Contains(err.Error(), "svc-overlap") {
+		t.Errorf("expected error to mention 'svc-overlap', got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "work") || !strings.Contains(err.Error(), "personal") {
+		t.Errorf("expected error to mention both config names, got: %v", err)
 	}
 }
