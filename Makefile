@@ -1,10 +1,12 @@
 .PHONY: dev build serve web
 
+VERSION ?= dev
+
 web:
 	cd web && npm run build
 
 build: web
-	go build -o fido .
+	go build -ldflags "-X github.com/jorgenbs/fido/internal/version.Version=$(VERSION)" -o fido .
 
 serve: build
 	./fido serve &
