@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestFix_LaunchesInteractiveAgentAndChecksOutput(t *testing.T) {

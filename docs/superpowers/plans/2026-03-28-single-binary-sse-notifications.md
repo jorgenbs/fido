@@ -643,9 +643,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ruter-as/fido/internal/api"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/api"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 ```
@@ -782,9 +782,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
-	fidoweb "github.com/ruter-as/fido/web"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
+	fidoweb "github.com/jorgenbs/fido/web"
 )
 
 func NewServer(mgr *reports.Manager, cfg *config.Config, hub *Hub) *Server {

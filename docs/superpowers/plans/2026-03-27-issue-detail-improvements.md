@@ -404,7 +404,7 @@ Expected: FAIL with "h.RefreshMRStatus undefined"
 
 - [ ] **Step 3: Add the handler to `internal/api/handlers.go`**
 
-First, add the import for the gitlab package. Current imports block in handlers.go starts with `import (`. Add `"github.com/ruter-as/fido/internal/gitlab"` to the import list:
+First, add the import for the gitlab package. Current imports block in handlers.go starts with `import (`. Add `"github.com/jorgenbs/fido/internal/gitlab"` to the import list:
 
 ```go
 import (
@@ -419,9 +419,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/gitlab"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/gitlab"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 ```
 

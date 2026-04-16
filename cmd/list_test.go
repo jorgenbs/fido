@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestList_ShowsIssuesWithStages(t *testing.T) {

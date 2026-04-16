@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ruter-as/fido/internal/api"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
-	"github.com/ruter-as/fido/internal/syncer"
+	"github.com/jorgenbs/fido/internal/api"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/syncer"
 	"github.com/spf13/cobra"
 )
 

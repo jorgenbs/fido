@@ -186,7 +186,7 @@ In `internal/syncer/queue.go`, remove:
 
 In `internal/syncer/adapter.go`, remove the `FetchBuckets` method (lines 41-65), the `SaveBuckets` method (lines 94-105), and the `IsBucketStale` method (lines 128-134).
 
-Also remove the `"time"` import if it becomes unused after removing `SaveBuckets` (check — it's still used? No, `IsBucketStale` takes `time.Duration` but the method body uses `a.mgr.ReadTimeSeries`... actually the adapter implements the interface so if the interface method is removed, the implementation must be removed too). Remove the `"github.com/ruter-as/fido/internal/reports"` import only if no other method uses it — `SaveStacktrace` still uses `a.mgr` methods that don't need a `reports` import, but check. Actually `SaveBuckets` was the only method creating `reports.Bucket` and `reports.TimeSeries`. The `reports` package is still used via `a.mgr` which is `*reports.Manager`, but that's in the struct definition. Keep the import.
+Also remove the `"time"` import if it becomes unused after removing `SaveBuckets` (check — it's still used? No, `IsBucketStale` takes `time.Duration` but the method body uses `a.mgr.ReadTimeSeries`... actually the adapter implements the interface so if the interface method is removed, the implementation must be removed too). Remove the `"github.com/jorgenbs/fido/internal/reports"` import only if no other method uses it — `SaveStacktrace` still uses `a.mgr` methods that don't need a `reports` import, but check. Actually `SaveBuckets` was the only method creating `reports.Bucket` and `reports.TimeSeries`. The `reports` package is still used via `a.mgr` which is `*reports.Manager`, but that's in the struct definition. Keep the import.
 
 Remove `"time"` from adapter.go imports since `SaveBuckets` was the only user (it called `time.Now()`). The `IsBucketStale` method signature has `time.Duration` parameter but we're removing that too. Check if anything else uses `time` — no. Remove it.
 
@@ -738,8 +738,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func newTestImportServer(t *testing.T) *httptest.Server {
@@ -892,9 +892,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -1396,7 +1396,7 @@ Run: `go build ./... 2>&1` to catch any compile errors from unused imports.
 
 Check `cmd/scan.go` — `loadErrorTemplate` and `errorReportData` are still used by `cmd/import.go` (same package). The `syncer` import in `scan.go` is still used by `runScanWithResults` returning `[]syncer.ScanResult`. Keep it.
 
-Check `internal/syncer/adapter.go` — after removing bucket methods, verify `"time"` import is removed and `"github.com/ruter-as/fido/internal/reports"` is only used if needed. The `reports` package is used in `SaveStacktrace` (calls `a.mgr.ReadError` and `a.mgr.WriteError` — these are `*reports.Manager` methods). The `reports` import is used for the struct type. Actually check — `a.mgr` is `*reports.Manager` which is declared in the struct. The import for `reports` is needed. But `time` is only needed if any method references it — `SaveBuckets` was removed, check others. None use `time`. Remove `"time"`.
+Check `internal/syncer/adapter.go` — after removing bucket methods, verify `"time"` import is removed and `"github.com/jorgenbs/fido/internal/reports"` is only used if needed. The `reports` package is used in `SaveStacktrace` (calls `a.mgr.ReadError` and `a.mgr.WriteError` — these are `*reports.Manager` methods). The `reports` import is used for the struct type. Actually check — `a.mgr` is `*reports.Manager` which is declared in the struct. The import for `reports` is needed. But `time` is only needed if any method references it — `SaveBuckets` was removed, check others. None use `time`. Remove `"time"`.
 
 Fix any issues found.
 

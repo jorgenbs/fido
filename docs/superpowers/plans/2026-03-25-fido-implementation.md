@@ -75,7 +75,7 @@ fido/
 
 - [ ] **Step 1: Initialize Go module**
 
-Run: `go mod init github.com/ruter-as/fido`
+Run: `go mod init github.com/jorgenbs/fido`
 
 - [ ] **Step 2: Install dependencies**
 
@@ -266,7 +266,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -307,7 +307,7 @@ func init() {
 // main.go
 package main
 
-import "github.com/ruter-as/fido/cmd"
+import "github.com/jorgenbs/fido/cmd"
 
 func main() {
 	cmd.Execute()
@@ -970,9 +970,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestScanCommand_CreatesErrorReports(t *testing.T) {
@@ -1084,9 +1084,9 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -1421,9 +1421,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/agent"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/agent"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestInvestigate_ProducesInvestigationReport(t *testing.T) {
@@ -1487,9 +1487,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ruter-as/fido/internal/agent"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/agent"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -1651,8 +1651,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestFix_ProducesFixReportAndResolve(t *testing.T) {
@@ -1720,9 +1720,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/agent"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/agent"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -1883,7 +1883,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestList_ShowsIssuesWithStages(t *testing.T) {
@@ -1957,7 +1957,7 @@ import (
 	"path/filepath"
 	"text/tabwriter"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -2012,7 +2012,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -2109,7 +2109,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestListIssuesHandler(t *testing.T) {
@@ -2201,8 +2201,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 type IssueListItem struct {
@@ -2308,8 +2308,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 type Server struct {
@@ -2373,9 +2373,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/api"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/api"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 
@@ -2518,8 +2518,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 

@@ -3,9 +3,9 @@ package syncer
 import (
 	"fmt"
 	"strings"
-	"github.com/ruter-as/fido/internal/api"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/api"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 // Adapter implements Deps by bridging the engine to the real Datadog client,

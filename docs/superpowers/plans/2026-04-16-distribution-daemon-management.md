@@ -198,7 +198,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ruter-as/fido/internal/pidfile"
+	"github.com/jorgenbs/fido/internal/pidfile"
 )
 
 func fidoDir() string {
@@ -372,7 +372,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/ruter-as/fido/internal/pidfile"
+	"github.com/jorgenbs/fido/internal/pidfile"
 	"github.com/spf13/cobra"
 )
 
@@ -444,7 +444,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ruter-as/fido/internal/pidfile"
+	"github.com/jorgenbs/fido/internal/pidfile"
 	"github.com/spf13/cobra"
 )
 
@@ -529,11 +529,11 @@ git commit -m "feat: add fido stop command"
 
 ### Task 5: Module path migration
 
-Change all imports from `github.com/ruter-as/fido` to `github.com/jorgenbs/fido`.
+Change all imports from `github.com/jorgenbs/fido` to `github.com/jorgenbs/fido`.
 
 **Files:**
 - Modify: `go.mod`
-- Modify: all `.go` files that import `github.com/ruter-as/fido/...`
+- Modify: all `.go` files that import `github.com/jorgenbs/fido/...`
 
 The full list of files with imports to change (29 files):
 - `go.mod`
@@ -555,7 +555,7 @@ module github.com/jorgenbs/fido
 
 Run:
 ```bash
-find . -name '*.go' -not -path './web/*' -exec sed -i '' 's|github.com/ruter-as/fido|github.com/jorgenbs/fido|g' {} +
+find . -name '*.go' -not -path './web/*' -exec sed -i '' 's|github.com/jorgenbs/fido|github.com/jorgenbs/fido|g' {} +
 ```
 
 - [ ] **Step 3: Verify build**

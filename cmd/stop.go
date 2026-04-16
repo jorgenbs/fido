@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ruter-as/fido/internal/pidfile"
+	"github.com/jorgenbs/fido/internal/pidfile"
 	"github.com/spf13/cobra"
 )
 

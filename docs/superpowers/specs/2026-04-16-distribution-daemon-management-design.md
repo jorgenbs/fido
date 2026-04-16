@@ -45,7 +45,7 @@ Unchanged — foreground mode. Used for development and as the fork target for t
 
 ### 1. Module path migration
 
-- Change `go.mod` from `github.com/ruter-as/fido` to `github.com/jorgenbs/fido`
+- Change `go.mod` from `github.com/jorgenbs/fido` to `github.com/jorgenbs/fido`
 - Update all internal imports across the codebase
 - Create repo on GitHub as `jorgenbs/fido` (public)
 - Add `origin` remote

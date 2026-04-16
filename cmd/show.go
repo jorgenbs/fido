@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/reports"
 	"github.com/spf13/cobra"
 )
 

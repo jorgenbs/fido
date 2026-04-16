@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestListIssuesHandler(t *testing.T) {

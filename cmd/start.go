@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ruter-as/fido/internal/pidfile"
+	"github.com/jorgenbs/fido/internal/pidfile"
 )
 
 func fidoDir() string {

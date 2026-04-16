@@ -1,4 +1,4 @@
-module github.com/ruter-as/fido
+module github.com/jorgenbs/fido
 
 go 1.25.7
 

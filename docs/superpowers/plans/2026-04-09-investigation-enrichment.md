@@ -679,7 +679,7 @@ Expected: PASS
 
 - [ ] **Step 5: Write the failing test for frequency formatting**
 
-Add `"time"` and `"github.com/ruter-as/fido/internal/datadog"` to the import block in `cmd/investigate_test.go`.
+Add `"time"` and `"github.com/jorgenbs/fido/internal/datadog"` to the import block in `cmd/investigate_test.go`.
 
 Add to `cmd/investigate_test.go`:
 

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ruter-as/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/config"
 	"github.com/spf13/cobra"
 )
 

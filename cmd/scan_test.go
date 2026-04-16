@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadog"
-	ddclient "github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
+	ddclient "github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func newTestDDClient(t *testing.T, serverURL string) *ddclient.Client {

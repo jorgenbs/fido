@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 func TestInvestigate_ProducesInvestigationReport(t *testing.T) {

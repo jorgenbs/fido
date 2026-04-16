@@ -7,9 +7,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/reports"
-	fidoweb "github.com/ruter-as/fido/web"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/reports"
+	fidoweb "github.com/jorgenbs/fido/web"
 )
 
 type Server struct {

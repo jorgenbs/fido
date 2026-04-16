@@ -415,7 +415,7 @@ scanCfg := &config.Config{
 }
 ```
 
-Then add the `refreshCIStatuses` function at the bottom of `cmd/scan.go`. Add import `"log"` and `"github.com/ruter-as/fido/internal/gitlab"` to the import block:
+Then add the `refreshCIStatuses` function at the bottom of `cmd/scan.go`. Add import `"log"` and `"github.com/jorgenbs/fido/internal/gitlab"` to the import block:
 
 ```go
 // refreshCIStatuses updates ci_status and ci_url in meta.json for all issues
@@ -554,7 +554,7 @@ Expected: FAIL — `runFixIterate` undefined.
 
 - [ ] **Step 4.3: Add `--iterate` flag and `runFixIterate` to `cmd/fix.go`**
 
-Add imports `"github.com/ruter-as/fido/internal/gitlab"` and `"log"` to `cmd/fix.go`.
+Add imports `"github.com/jorgenbs/fido/internal/gitlab"` and `"log"` to `cmd/fix.go`.
 
 Add the iterate prompt template constant after `fixPromptTemplate`:
 

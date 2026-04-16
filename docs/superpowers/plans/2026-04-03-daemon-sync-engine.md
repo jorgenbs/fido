@@ -1209,10 +1209,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ruter-as/fido/internal/api"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/datadog"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/api"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/datadog"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 // Adapter implements Deps by bridging the engine to the real Datadog client,
@@ -1463,7 +1463,7 @@ func runScanWithResults(cfg *config.Config, ddClient *datadog.Client, mgr *repor
 
 Add the import for `syncer`:
 ```go
-"github.com/ruter-as/fido/internal/syncer"
+"github.com/jorgenbs/fido/internal/syncer"
 ```
 
 - [ ] **Step 2: Update serve.go to use the engine**
@@ -1521,7 +1521,7 @@ go func() {
 
 Add import for `syncer`:
 ```go
-"github.com/ruter-as/fido/internal/syncer"
+"github.com/jorgenbs/fido/internal/syncer"
 ```
 
 - [ ] **Step 3: Verify compilation**

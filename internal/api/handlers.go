@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/ruter-as/fido/internal/config"
-	"github.com/ruter-as/fido/internal/gitlab"
-	"github.com/ruter-as/fido/internal/reports"
+	"github.com/jorgenbs/fido/internal/config"
+	"github.com/jorgenbs/fido/internal/gitlab"
+	"github.com/jorgenbs/fido/internal/reports"
 )
 
 type IssueListItem struct {
