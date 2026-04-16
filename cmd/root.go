@@ -19,6 +19,10 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "fido",
 	Short: "Fetch errors from Datadog, investigate, and propose fixes",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		port, _ := cmd.Flags().GetString("port")
+		return runStart(port)
+	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if cfgFile == "" {
 			home, _ := os.UserHomeDir()
@@ -42,4 +46,5 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.fido/config.yml)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (log HTTP requests)")
+	rootCmd.Flags().String("port", "8080", "port for the dashboard")
 }
