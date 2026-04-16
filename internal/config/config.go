@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -149,10 +150,8 @@ func (dc DatadogConfigs) AllServices() []string {
 // or nil if the service is not found in any config.
 func (dc DatadogConfigs) ForService(service string) *DatadogConfig {
 	for i := range dc {
-		for _, svc := range dc[i].Services {
-			if svc == service {
-				return &dc[i]
-			}
+		if slices.Contains(dc[i].Services, service) {
+			return &dc[i]
 		}
 	}
 	return nil
