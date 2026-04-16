@@ -4,7 +4,7 @@
 
 # Fido
 
-A developer sidecar that fetches errors from Datadog, investigates them in code, and proposes fixes as draft GitLab MRs — all powered by AI.
+An AI powered developer workflow for importing errors from Datadog, investigates them in code, and proposes fixes as draft GitLab MRs.
 
 ## Install
 
