@@ -68,7 +68,7 @@ Unchanged — foreground mode. Used for development and as the fork target for t
 
 `.goreleaser.yml` at repo root:
 
-- **Before hooks:** `make web` to build the frontend before Go compilation
+- **Frontend:** built by the GitHub Actions workflow before GoReleaser runs (no `before.hooks` needed)
 - **Targets:** `darwin/arm64`, `darwin/amd64`, `linux/arm64`, `linux/amd64`
 - **Ldflags:** `-X github.com/jorgenbs/fido/internal/version.Version={{.Version}}`
 - **Archives:** `fido_{{.Version}}_{{.Os}}_{{.Arch}}.tar.gz`
