@@ -8,27 +8,33 @@ import (
 	"github.com/jorgenbs/fido/internal/reports"
 )
 
+// ClientResolver maps a service name to the Datadog client that owns it.
+type ClientResolver func(service string) *datadog.Client
+
 // Adapter implements Deps by bridging the engine to the real Datadog client,
 // reports manager, and SSE hub.
 type Adapter struct {
-	ddClient *datadog.Client
-	mgr      *reports.Manager
-	hub      *api.Hub
-	scanFn   func() ([]ScanResult, error)
+	resolveClient ClientResolver
+	defaultClient *datadog.Client
+	mgr           *reports.Manager
+	hub           *api.Hub
+	scanFn        func() ([]ScanResult, error)
 }
 
 // NewAdapter creates a Deps adapter.
 func NewAdapter(
-	ddClient *datadog.Client,
+	resolveClient ClientResolver,
+	defaultClient *datadog.Client,
 	mgr *reports.Manager,
 	hub *api.Hub,
 	scanFn func() ([]ScanResult, error),
 ) *Adapter {
 	return &Adapter{
-		ddClient: ddClient,
-		mgr:      mgr,
-		hub:      hub,
-		scanFn:   scanFn,
+		resolveClient: resolveClient,
+		defaultClient: defaultClient,
+		mgr:           mgr,
+		hub:           hub,
+		scanFn:        scanFn,
 	}
 }
 
@@ -56,7 +62,8 @@ func (a *Adapter) FetchStacktrace(issueID, service, env, firstSeen, lastSeen str
 		}
 	}
 
-	ctx, err := a.ddClient.FetchIssueContext(issueID, service, env, firstSeen, lastSeen)
+	client := a.clientForService(service)
+	ctx, err := client.FetchIssueContext(issueID, service, env, firstSeen, lastSeen)
 	if err != nil {
 		return "", err
 	}
@@ -135,11 +142,13 @@ func (a *Adapter) ListTrackedIssues() ([]TrackedIssue, error) {
 }
 
 func (a *Adapter) ResolveIssue(datadogIssueID string) error {
-	return a.ddClient.ResolveIssue(datadogIssueID)
+	client := a.clientForIssue(datadogIssueID)
+	return client.ResolveIssue(datadogIssueID)
 }
 
 func (a *Adapter) GetIssueStatus(datadogIssueID string) (string, error) {
-	return a.ddClient.GetIssueStatus(datadogIssueID)
+	client := a.clientForIssue(datadogIssueID)
+	return client.GetIssueStatus(datadogIssueID)
 }
 
 func (a *Adapter) SetDatadogStatus(issueID, status, resolvedAt string) error {
@@ -148,4 +157,30 @@ func (a *Adapter) SetDatadogStatus(issueID, status, resolvedAt string) error {
 
 func (a *Adapter) IncrementRegressionCount(issueID string) error {
 	return a.mgr.IncrementRegressionCount(issueID)
+}
+
+// clientForService returns the Datadog client for the given service name,
+// falling back to the default client if the resolver returns nil or no
+// resolver is set.
+func (a *Adapter) clientForService(service string) *datadog.Client {
+	if a.resolveClient != nil && service != "" {
+		if c := a.resolveClient(service); c != nil {
+			return c
+		}
+	}
+	return a.defaultClient
+}
+
+// clientForIssue resolves the Datadog client for a given issue ID by reading
+// the issue's metadata to find its service, then resolving the client.
+// Falls back to the default client if metadata is unavailable.
+func (a *Adapter) clientForIssue(issueID string) *datadog.Client {
+	if a.resolveClient != nil {
+		if meta, err := a.mgr.ReadMetadata(issueID); err == nil && meta.Service != "" {
+			if c := a.resolveClient(meta.Service); c != nil {
+				return c
+			}
+		}
+	}
+	return a.defaultClient
 }
