@@ -72,15 +72,15 @@ func TestScanCommand_DoesNotCreateNewIssues(t *testing.T) {
 	ddClient := newTestDDClient(t, server.URL)
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{
+		Datadog: config.DatadogConfigs{{
 			Services:     []string{"svc-a"},
 			Site:         "test.datadoghq.com",
 			OrgSubdomain: "myorg",
-		},
+		}},
 		Scan: config.ScanConfig{Since: "24h"},
 	}
 
-	count, err := runScan(cfg, ddClient, mgr)
+	count, err := runScan(cfg, &cfg.Datadog[0], ddClient, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,15 +110,15 @@ func TestScanCommand_UpdatesExistingIssues(t *testing.T) {
 	})
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{
+		Datadog: config.DatadogConfigs{{
 			Services:     []string{"svc-a"},
 			Site:         "test.datadoghq.com",
 			OrgSubdomain: "myorg",
-		},
+		}},
 		Scan: config.ScanConfig{Since: "24h"},
 	}
 
-	_, err := runScan(cfg, ddClient, mgr)
+	_, err := runScan(cfg, &cfg.Datadog[0], ddClient, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -170,11 +170,11 @@ func TestScanCommand_SkipsExistingIssues(t *testing.T) {
 	mgr.WriteMetadata("issue-1", &reports.MetaData{Service: "svc-a"})
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{Services: []string{"svc-a"}},
+		Datadog: config.DatadogConfigs{{Services: []string{"svc-a"}}},
 		Scan:    config.ScanConfig{Since: "24h"},
 	}
 
-	count, err := runScan(cfg, ddClient, mgr)
+	count, err := runScan(cfg, &cfg.Datadog[0], ddClient, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -246,11 +246,11 @@ func TestRunScan_CIRefresh_SkipsWhenNoResolve(t *testing.T) {
 
 	ddClient := newTestDDClient(t, server.URL)
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{Services: []string{"svc-a"}},
+		Datadog: config.DatadogConfigs{{Services: []string{"svc-a"}}},
 		Scan:    config.ScanConfig{Since: "24h"},
 	}
 
-	_, err := runScan(cfg, ddClient, mgr)
+	_, err := runScan(cfg, &cfg.Datadog[0], ddClient, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

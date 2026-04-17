@@ -22,10 +22,13 @@ var importCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
+		if len(cfg.Datadog) == 0 {
+			return fmt.Errorf("no datadog config found")
+		}
 		ddClient, err := datadog.NewClient(
-			cfg.Datadog.Token,
-			cfg.Datadog.Site,
-			cfg.Datadog.OrgSubdomain,
+			cfg.Datadog[0].Token,
+			cfg.Datadog[0].Site,
+			cfg.Datadog[0].OrgSubdomain,
 		)
 		if err != nil {
 			return err
@@ -49,7 +52,8 @@ func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr
 	// The Datadog error tracking API searches by service, not by issue ID directly.
 	// Use a wide time window for import — the user is requesting a specific issue
 	// that may be older than the default scan window.
-	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, "8760h")
+	allServices := cfg.Datadog.AllServices()
+	issues, err := ddClient.SearchErrorIssues(allServices, "8760h")
 	if err != nil {
 		return fmt.Errorf("searching Datadog: %w", err)
 	}
@@ -62,7 +66,7 @@ func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr
 		}
 	}
 	if found == nil {
-		return fmt.Errorf("issue %s not found on Datadog (searched services: %v)", issueID, cfg.Datadog.Services)
+		return fmt.Errorf("issue %s not found on Datadog (searched services: %v)", issueID, allServices)
 	}
 
 	service := found.Attributes.Service
@@ -70,10 +74,18 @@ func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr
 		return fmt.Errorf("service %q is not configured in repositories — add it to your config.yml", service)
 	}
 
+	// Determine which DD config owns this service for URL building
+	var ddOrg, ddSite string
+	if dd := cfg.Datadog.ForService(service); dd != nil {
+		ddOrg, ddSite = dd.OrgSubdomain, dd.Site
+	} else if len(cfg.Datadog) > 0 {
+		ddOrg, ddSite = cfg.Datadog[0].OrgSubdomain, cfg.Datadog[0].Site
+	}
+
 	// Build URLs
-	eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, found.Attributes.Service, found.Attributes.Env, found.Attributes.FirstSeen, found.Attributes.LastSeen)
-	tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, found.Attributes.Service, found.Attributes.Env, found.Attributes.FirstSeen, found.Attributes.LastSeen)
-	datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, found.ID)
+	eventsURL := buildEventsURL(ddOrg, ddSite, found.Attributes.Service, found.Attributes.Env, found.Attributes.FirstSeen, found.Attributes.LastSeen)
+	tracesURL := buildTracesURL(ddOrg, ddSite, found.Attributes.Service, found.Attributes.Env, found.Attributes.FirstSeen, found.Attributes.LastSeen)
+	datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", ddOrg, ddSite, found.ID)
 
 	// Render error report using existing template
 	tmpl, err := loadErrorTemplate()

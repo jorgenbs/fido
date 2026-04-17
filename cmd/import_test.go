@@ -56,11 +56,11 @@ func TestImportIssue_Success(t *testing.T) {
 	ddClient := newTestDDClient(t, server.URL)
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{
+		Datadog: config.DatadogConfigs{{
 			Services:     []string{"svc-a"},
 			Site:         "test.datadoghq.com",
 			OrgSubdomain: "myorg",
-		},
+		}},
 		Scan: config.ScanConfig{Since: "24h"},
 		Repositories: map[string]config.RepoConfig{
 			"svc-a": {Local: "/tmp/svc-a"},
@@ -97,11 +97,11 @@ func TestImportIssue_ServiceNotConfigured(t *testing.T) {
 	ddClient := newTestDDClient(t, server.URL)
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{
+		Datadog: config.DatadogConfigs{{
 			Services:     []string{"svc-a"},
 			Site:         "test.datadoghq.com",
 			OrgSubdomain: "myorg",
-		},
+		}},
 		Scan:         config.ScanConfig{Since: "24h"},
 		Repositories: map[string]config.RepoConfig{},
 	}
@@ -125,11 +125,11 @@ func TestImportIssue_AlreadyExists(t *testing.T) {
 	ddClient := newTestDDClient(t, server.URL)
 
 	cfg := &config.Config{
-		Datadog: config.DatadogConfig{
+		Datadog: config.DatadogConfigs{{
 			Services:     []string{"svc-a"},
 			Site:         "test.datadoghq.com",
 			OrgSubdomain: "myorg",
-		},
+		}},
 		Scan: config.ScanConfig{Since: "24h"},
 		Repositories: map[string]config.RepoConfig{
 			"svc-a": {Local: "/tmp/svc-a"},

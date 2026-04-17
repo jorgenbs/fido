@@ -127,7 +127,13 @@ func runFix(issueID, service string, cfg *config.Config, mgr *reports.Manager, p
 
 	home, _ := os.UserHomeDir()
 	issueReportsDir := filepath.Join(home, ".fido", "reports", issueID)
-	datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issueID)
+	var ddOrg, ddSite string
+	if dd := cfg.Datadog.ForService(service); dd != nil {
+		ddOrg, ddSite = dd.OrgSubdomain, dd.Site
+	} else if len(cfg.Datadog) > 0 {
+		ddOrg, ddSite = cfg.Datadog[0].OrgSubdomain, cfg.Datadog[0].Site
+	}
+	datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", ddOrg, ddSite, issueID)
 
 	prompt := fmt.Sprintf(fixPromptTemplate,
 		errorContent, investigationContent,

@@ -27,10 +27,13 @@ var serveCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
+		if len(cfg.Datadog) == 0 {
+			return fmt.Errorf("no datadog config found")
+		}
 		ddClient, err := datadog.NewClient(
-			cfg.Datadog.Token,
-			cfg.Datadog.Site,
-			cfg.Datadog.OrgSubdomain,
+			cfg.Datadog[0].Token,
+			cfg.Datadog[0].Site,
+			cfg.Datadog[0].OrgSubdomain,
 		)
 		if err != nil {
 			return err
@@ -42,7 +45,7 @@ var serveCmd = &cobra.Command{
 		server := api.NewServer(mgr, cfg, hub)
 		handlers := api.GetHandlers(server)
 		handlers.SetScanFunc(func() error {
-			count, err := runScan(cfg, ddClient, mgr)
+			count, err := runScan(cfg, &cfg.Datadog[0], ddClient, mgr)
 			if err != nil {
 				return err
 			}
@@ -91,7 +94,7 @@ var serveCmd = &cobra.Command{
 
 		// Run initial scan synchronously to validate config/credentials
 		fmt.Println("Running initial scan...")
-		count, _, scanErr := runScanWithResults(cfg, ddClient, mgr)
+		count, _, scanErr := runScanWithResults(cfg, &cfg.Datadog[0], ddClient, mgr)
 		if scanErr != nil {
 			return fmt.Errorf("initial scan failed (check your Datadog token): %w", scanErr)
 		}
@@ -99,7 +102,7 @@ var serveCmd = &cobra.Command{
 		hub.Publish(api.Event{Type: "scan:complete", Payload: map[string]any{"count": count}})
 
 		adapter := syncer.NewAdapter(ddClient, mgr, hub, func() ([]syncer.ScanResult, error) {
-			c, results, err := runScanWithResults(cfg, ddClient, mgr)
+			c, results, err := runScanWithResults(cfg, &cfg.Datadog[0], ddClient, mgr)
 			if err != nil {
 				return nil, err
 			}

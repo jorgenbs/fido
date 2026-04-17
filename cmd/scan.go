@@ -25,37 +25,47 @@ var scanCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
-		ddClient, err := datadog.NewClient(
-			cfg.Datadog.Token,
-			cfg.Datadog.Site,
-			cfg.Datadog.OrgSubdomain,
-		)
-		if err != nil {
-			return err
-		}
-		ddClient.SetVerbose(verbose)
-
 		services, _ := cmd.Flags().GetStringSlice("service")
-		if len(services) == 0 {
-			services = cfg.Datadog.Services
-		}
-
 		since, _ := cmd.Flags().GetString("since")
 		if since == "" {
 			since = cfg.Scan.Since
 		}
 
-		scanCfg := &config.Config{
-			Datadog:      config.DatadogConfig{Services: services, Site: cfg.Datadog.Site, OrgSubdomain: cfg.Datadog.OrgSubdomain},
-			Scan:         config.ScanConfig{Since: since},
-			Repositories: cfg.Repositories,
-		}
+		totalCount := 0
+		for i := range cfg.Datadog {
+			ddCfg := &cfg.Datadog[i]
 
-		count, err := runScan(scanCfg, ddClient, mgr)
-		if err != nil {
-			return err
+			cfgServices := ddCfg.Services
+			if len(services) > 0 {
+				cfgServices = filterServices(ddCfg.Services, services)
+				if len(cfgServices) == 0 {
+					continue
+				}
+			}
+
+			ddClient, err := datadog.NewClient(ddCfg.Token, ddCfg.Site, ddCfg.OrgSubdomain)
+			if err != nil {
+				return err
+			}
+			ddClient.SetVerbose(verbose)
+
+			scanDdCfg := &config.DatadogConfig{
+				Services:     cfgServices,
+				Site:         ddCfg.Site,
+				OrgSubdomain: ddCfg.OrgSubdomain,
+			}
+			scanCfg := &config.Config{
+				Scan:         config.ScanConfig{Since: since},
+				Repositories: cfg.Repositories,
+			}
+
+			count, err := runScan(scanCfg, scanDdCfg, ddClient, mgr)
+			if err != nil {
+				return err
+			}
+			totalCount += count
 		}
-		fmt.Printf("Updated %d existing issues\n", count)
+		fmt.Printf("Updated %d existing issues\n", totalCount)
 		return nil
 	},
 }
@@ -77,8 +87,8 @@ type errorReportData struct {
 	TracesURL  string
 }
 
-func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) (int, error) {
-	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, cfg.Scan.Since)
+func runScan(cfg *config.Config, ddCfg *config.DatadogConfig, ddClient *datadog.Client, mgr *reports.Manager) (int, error) {
+	issues, err := ddClient.SearchErrorIssues(ddCfg.Services, cfg.Scan.Since)
 	if err != nil {
 		return 0, fmt.Errorf("scan: %w", err)
 	}
@@ -89,9 +99,9 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 			continue
 		}
 
-		eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
-		tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
-		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID)
+		eventsURL := buildEventsURL(ddCfg.OrgSubdomain, ddCfg.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		tracesURL := buildTracesURL(ddCfg.OrgSubdomain, ddCfg.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", ddCfg.OrgSubdomain, ddCfg.Site, issue.ID)
 
 		meta, err := mgr.ReadMetadata(issue.ID)
 		if err != nil {
@@ -122,8 +132,8 @@ func runScan(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager)
 
 // runScanWithResults runs a scan and returns both the count and structured results
 // for the sync engine to enqueue follow-up jobs.
-func runScanWithResults(cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) (int, []syncer.ScanResult, error) {
-	issues, err := ddClient.SearchErrorIssues(cfg.Datadog.Services, cfg.Scan.Since)
+func runScanWithResults(cfg *config.Config, ddCfg *config.DatadogConfig, ddClient *datadog.Client, mgr *reports.Manager) (int, []syncer.ScanResult, error) {
+	issues, err := ddClient.SearchErrorIssues(ddCfg.Services, cfg.Scan.Since)
 	if err != nil {
 		return 0, nil, fmt.Errorf("scan: %w", err)
 	}
@@ -136,9 +146,9 @@ func runScanWithResults(cfg *config.Config, ddClient *datadog.Client, mgr *repor
 			continue
 		}
 
-		eventsURL := buildEventsURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
-		tracesURL := buildTracesURL(cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
-		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", cfg.Datadog.OrgSubdomain, cfg.Datadog.Site, issue.ID)
+		eventsURL := buildEventsURL(ddCfg.OrgSubdomain, ddCfg.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		tracesURL := buildTracesURL(ddCfg.OrgSubdomain, ddCfg.Site, issue.Attributes.Service, issue.Attributes.Env, issue.Attributes.FirstSeen, issue.Attributes.LastSeen)
+		datadogURL := fmt.Sprintf("https://%s.%s/error-tracking/issue/%s", ddCfg.OrgSubdomain, ddCfg.Site, issue.ID)
 
 		meta, err := mgr.ReadMetadata(issue.ID)
 		if err != nil {
@@ -302,6 +312,20 @@ func refreshCIStatuses(cfg *config.Config, mgr *reports.Manager) {
 			}
 		}
 	}
+}
+
+func filterServices(configServices, requestedServices []string) []string {
+	requested := map[string]bool{}
+	for _, s := range requestedServices {
+		requested[s] = true
+	}
+	var result []string
+	for _, s := range configServices {
+		if requested[s] {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func init() {

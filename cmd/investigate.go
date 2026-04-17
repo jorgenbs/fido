@@ -44,8 +44,8 @@ var investigateCmd = &cobra.Command{
 			}
 		}
 		var ddClient *datadog.Client
-		if cfg.Datadog.Token != "" {
-			if c, err := datadog.NewClient(cfg.Datadog.Token, cfg.Datadog.Site, cfg.Datadog.OrgSubdomain); err == nil {
+		if len(cfg.Datadog) > 0 && cfg.Datadog[0].Token != "" {
+			if c, err := datadog.NewClient(cfg.Datadog[0].Token, cfg.Datadog[0].Site, cfg.Datadog[0].OrgSubdomain); err == nil {
 				c.SetVerbose(verbose)
 				ddClient = c
 			}
