@@ -22,20 +22,17 @@ var importCmd = &cobra.Command{
 		reportsDir := filepath.Join(home, ".fido", "reports")
 		mgr := reports.NewManager(reportsDir)
 
-		if len(cfg.Datadog) == 0 {
-			return fmt.Errorf("no datadog config found")
+		var ddClients []*datadog.Client
+		for i := range cfg.Datadog {
+			c, err := datadog.NewClient(cfg.Datadog[i].Token, cfg.Datadog[i].Site, cfg.Datadog[i].OrgSubdomain)
+			if err != nil {
+				return err
+			}
+			c.SetVerbose(verbose)
+			ddClients = append(ddClients, c)
 		}
-		ddClient, err := datadog.NewClient(
-			cfg.Datadog[0].Token,
-			cfg.Datadog[0].Site,
-			cfg.Datadog[0].OrgSubdomain,
-		)
-		if err != nil {
-			return err
-		}
-		ddClient.SetVerbose(verbose)
 
-		if err := runImport(issueID, cfg, ddClient, mgr); err != nil {
+		if err := runImport(issueID, cfg, ddClients, mgr); err != nil {
 			return err
 		}
 		fmt.Printf("Successfully imported issue %s\n", issueID)
@@ -43,30 +40,31 @@ var importCmd = &cobra.Command{
 	},
 }
 
-func runImport(issueID string, cfg *config.Config, ddClient *datadog.Client, mgr *reports.Manager) error {
+func runImport(issueID string, cfg *config.Config, ddClients []*datadog.Client, mgr *reports.Manager) error {
 	if mgr.Exists(issueID) {
 		return fmt.Errorf("issue %s is already imported", issueID)
 	}
 
-	// Fetch all issues for configured services, then find the one we want.
-	// The Datadog error tracking API searches by service, not by issue ID directly.
-	// Use a wide time window for import — the user is requesting a specific issue
-	// that may be older than the default scan window.
-	allServices := cfg.Datadog.AllServices()
-	issues, err := ddClient.SearchErrorIssues(allServices, "8760h")
-	if err != nil {
-		return fmt.Errorf("searching Datadog: %w", err)
-	}
-
+	// Search across all Datadog configs to find the issue.
+	// Each client searches its own config's services.
 	var found *datadog.ErrorIssue
-	for i := range issues {
-		if issues[i].ID == issueID {
-			found = &issues[i]
+	for i, ddClient := range ddClients {
+		issues, err := ddClient.SearchErrorIssues(cfg.Datadog[i].Services, "8760h")
+		if err != nil {
+			return fmt.Errorf("searching Datadog (%s): %w", cfg.Datadog[i].Name, err)
+		}
+		for j := range issues {
+			if issues[j].ID == issueID {
+				found = &issues[j]
+				break
+			}
+		}
+		if found != nil {
 			break
 		}
 	}
 	if found == nil {
-		return fmt.Errorf("issue %s not found on Datadog (searched services: %v)", issueID, allServices)
+		return fmt.Errorf("issue %s not found on Datadog (searched services: %v)", issueID, cfg.Datadog.AllServices())
 	}
 
 	service := found.Attributes.Service

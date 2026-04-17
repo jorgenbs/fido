@@ -117,7 +117,7 @@ var serveCmd = &cobra.Command{
 
 		// Wire import to enqueue stacktrace fetch immediately
 		handlers.SetImportFunc(func(issueID string) error {
-			if err := runImport(issueID, cfg, ddClient, mgr); err != nil {
+			if err := runImport(issueID, cfg, []*datadog.Client{ddClient}, mgr); err != nil {
 				return err
 			}
 			// Enqueue stacktrace fetch in the sync engine

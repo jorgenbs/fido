@@ -44,8 +44,12 @@ var investigateCmd = &cobra.Command{
 			}
 		}
 		var ddClient *datadog.Client
-		if len(cfg.Datadog) > 0 && cfg.Datadog[0].Token != "" {
-			if c, err := datadog.NewClient(cfg.Datadog[0].Token, cfg.Datadog[0].Site, cfg.Datadog[0].OrgSubdomain); err == nil {
+		ddCfg := cfg.Datadog.ForService(service)
+		if ddCfg == nil && len(cfg.Datadog) > 0 {
+			ddCfg = &cfg.Datadog[0]
+		}
+		if ddCfg != nil && ddCfg.Token != "" {
+			if c, err := datadog.NewClient(ddCfg.Token, ddCfg.Site, ddCfg.OrgSubdomain); err == nil {
 				c.SetVerbose(verbose)
 				ddClient = c
 			}

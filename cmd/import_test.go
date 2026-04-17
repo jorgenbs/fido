@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	ddclient "github.com/jorgenbs/fido/internal/datadog"
 	"github.com/jorgenbs/fido/internal/config"
 	"github.com/jorgenbs/fido/internal/reports"
 )
@@ -67,7 +68,7 @@ func TestImportIssue_Success(t *testing.T) {
 		},
 	}
 
-	err := runImport("issue-abc", cfg, ddClient, mgr)
+	err := runImport("issue-abc", cfg, []*ddclient.Client{ddClient}, mgr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestImportIssue_ServiceNotConfigured(t *testing.T) {
 		Repositories: map[string]config.RepoConfig{},
 	}
 
-	err := runImport("issue-abc", cfg, ddClient, mgr)
+	err := runImport("issue-abc", cfg, []*ddclient.Client{ddClient}, mgr)
 	if err == nil {
 		t.Fatal("expected error for unconfigured service")
 	}
@@ -136,7 +137,7 @@ func TestImportIssue_AlreadyExists(t *testing.T) {
 		},
 	}
 
-	err := runImport("issue-abc", cfg, ddClient, mgr)
+	err := runImport("issue-abc", cfg, []*ddclient.Client{ddClient}, mgr)
 	if err == nil {
 		t.Fatal("expected error for already-existing issue")
 	}
