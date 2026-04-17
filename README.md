@@ -4,7 +4,7 @@
 
 # Fido
 
-An AI powered developer workflow for importing errors from Datadog, investigates them in code, and proposes fixes as draft GitLab MRs.
+An agent-agnostic developer workflow for importing errors from Datadog, investigates them in code, and proposes fixes as draft GitLab MRs.
 
 ## Install
 
@@ -40,7 +40,7 @@ Open **http://localhost:8080** to access the dashboard.
 
 ### Prerequisites
 
-- Datadog Personal Access Token with `error_tracking_read`, `apm_read`, and `logs_read_data` scopes
+- Datadog Personal Access Token with `error_tracking_read`, `error_tracking_write`, `apm_read`, and `logs_read_data` scopes
 - `glab` CLI authenticated (for MR creation)
 - An AI agent CLI (default: `claude`)
 

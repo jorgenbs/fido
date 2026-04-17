@@ -9,6 +9,21 @@ datadog:
   services:         # Datadog service names to monitor
     - "my-service"
 
+# Multi-site alternative — use named entries instead of a flat config:
+# datadog:
+#   work:
+#     token: ""
+#     site: "datadoghq.eu"
+#     org_subdomain: "myworkorg"
+#     services:
+#       - "svc-a"
+#       - "svc-b"
+#   personal:
+#     token: ""
+#     site: "datadoghq.com"
+#     services:
+#       - "svc-x"
+
 scan:
   interval: "15m"   # How often the daemon polls Datadog
   since: "24h"      # How far back to look for errors
