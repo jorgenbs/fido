@@ -15,7 +15,7 @@ import (
 // newTestClient creates a Client pointing at the given httptest server.
 func newTestClient(t *testing.T, serverURL string) *Client {
 	t.Helper()
-	c, err := NewClient("test-token", "test.datadoghq.com", "myorg")
+	c, err := NewClient(ClientConfig{Token: "test-token", Site: "test.datadoghq.com", OrgSubdomain: "myorg"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -111,7 +111,7 @@ func TestClient_SearchErrorIssues(t *testing.T) {
 }
 
 func TestClient_FetchIssueContext_ReturnsDeepLinks(t *testing.T) {
-	c, err := NewClient("token", "datadoghq.eu", "myorg")
+	c, err := NewClient(ClientConfig{Token: "token", Site: "datadoghq.eu", OrgSubdomain: "myorg"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +334,7 @@ func TestClient_ResolveIssue(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewClient("test-token", "datadoghq.com", "myorg")
+	client, err := NewClient(ClientConfig{Token: "test-token", Site: "datadoghq.com", OrgSubdomain: "myorg"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestClient_GetIssueStatus(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client, err := NewClient("test-token", "datadoghq.com", "myorg")
+	client, err := NewClient(ClientConfig{Token: "test-token", Site: "datadoghq.com", OrgSubdomain: "myorg"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -384,8 +384,76 @@ func TestClient_GetIssueStatus(t *testing.T) {
 	}
 }
 
+func TestNewClient_APIKeyAuth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("API key auth should not send Bearer token")
+		}
+		if r.Header.Get("DD-API-KEY") == "" {
+			t.Error("expected DD-API-KEY header")
+		}
+		if r.Header.Get("DD-APPLICATION-KEY") == "" {
+			t.Error("expected DD-APPLICATION-KEY header")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":{"id":"abc123","type":"error_tracking_issue","attributes":{"state":"OPEN"}}}`)
+	}))
+	defer server.Close()
+
+	c, err := NewClient(ClientConfig{APIKey: "test-api-key", AppKey: "test-app-key", Site: "test.datadoghq.com", OrgSubdomain: "myorg"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	c.OverrideServers(datadog.ServerConfigurations{
+		{URL: server.URL, Description: "test"},
+	})
+
+	status, err := c.GetIssueStatus("abc123")
+	if err != nil {
+		t.Fatalf("GetIssueStatus: %v", err)
+	}
+	if status != "OPEN" {
+		t.Errorf("expected OPEN, got %s", status)
+	}
+}
+
+func TestNewClient_ValidationErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		cc   ClientConfig
+		want string
+	}{
+		{"no auth", ClientConfig{Site: "test.com"}, "datadog auth is required"},
+		{"no site", ClientConfig{Token: "x"}, "site is required"},
+		{"api_key without app_key", ClientConfig{APIKey: "x", Site: "test.com"}, "app_key is required"},
+		{"app_key without api_key", ClientConfig{AppKey: "x", Site: "test.com"}, "api_key is required"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := NewClient(tt.cc)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("expected error containing %q, got %q", tt.want, err.Error())
+			}
+		})
+	}
+}
+
+func TestNewClient_PATPreferredOverAPIKey(t *testing.T) {
+	c, err := NewClient(ClientConfig{Token: "pat", APIKey: "ak", AppKey: "appk", Site: "test.com"})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if c.authMode != AuthPAT {
+		t.Error("expected PAT auth mode when token is set")
+	}
+}
+
 func TestClient_SearchLogs(t *testing.T) {
-	client, err := NewClient("test-token", "test.datadoghq.com", "myorg")
+	client, err := NewClient(ClientConfig{Token: "test-token", Site: "test.datadoghq.com", OrgSubdomain: "myorg"})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

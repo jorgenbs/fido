@@ -23,6 +23,8 @@ type DatadogConfigs []DatadogConfig
 type DatadogConfig struct {
 	Name         string   `yaml:"-"`
 	Token        string   `yaml:"token"`
+	APIKey       string   `yaml:"api_key"`
+	AppKey       string   `yaml:"app_key"`
 	Site         string   `yaml:"site"`
 	OrgSubdomain string   `yaml:"org_subdomain"`
 	Services     []string `yaml:"services"`
@@ -42,10 +44,10 @@ type DatadogConfig struct {
 //	    staging:
 //	      token: "yyy"
 func (dc *DatadogConfigs) UnmarshalYAML(value *yaml.Node) error {
-	// Detect flat format: the node contains a "token" mapping key directly.
+	// Detect flat format: the node contains a "token" or "api_key" mapping key directly.
 	if value.Kind == yaml.MappingNode {
 		for i := 0; i < len(value.Content)-1; i += 2 {
-			if value.Content[i].Value == "token" {
+			if value.Content[i].Value == "token" || value.Content[i].Value == "api_key" {
 				// Flat format — decode as a single DatadogConfig.
 				var single DatadogConfig
 				if err := value.Decode(&single); err != nil {
@@ -77,6 +79,11 @@ func (dc *DatadogConfigs) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	return fmt.Errorf("datadog: expected a YAML mapping, got %v", value.Kind)
+}
+
+// HasAuth returns true if the config has either PAT or API key credentials.
+func (dc *DatadogConfig) HasAuth() bool {
+	return dc.Token != "" || (dc.APIKey != "" && dc.AppKey != "")
 }
 
 type ScanConfig struct {

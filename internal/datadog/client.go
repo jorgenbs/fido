@@ -13,8 +13,19 @@ import (
 	"github.com/DataDog/datadog-api-client-go/v2/api/datadogV2"
 )
 
+// AuthMode indicates how the client authenticates with Datadog.
+type AuthMode int
+
+const (
+	AuthPAT    AuthMode = iota // Personal Access Token (Bearer)
+	AuthAPIKey                 // API Key + Application Key
+)
+
 type Client struct {
+	authMode     AuthMode
 	token        string
+	apiKey       string
+	appKey       string
 	site         string
 	orgSubdomain string
 	verbose      bool
@@ -55,27 +66,58 @@ type LogAttributes struct {
 	Status    string
 }
 
-func NewClient(token, site, orgSubdomain string) (*Client, error) {
-	if token == "" {
-		return nil, fmt.Errorf("datadog token is required")
-	}
-	if site == "" {
+// ClientConfig holds the parameters for creating a Datadog client.
+// Either Token (PAT) or both APIKey+AppKey must be set.
+type ClientConfig struct {
+	Token        string
+	APIKey       string
+	AppKey       string
+	Site         string
+	OrgSubdomain string
+}
+
+func NewClient(cc ClientConfig) (*Client, error) {
+	if cc.Site == "" {
 		return nil, fmt.Errorf("datadog site is required")
+	}
+
+	if cc.APIKey != "" && cc.AppKey == "" {
+		return nil, fmt.Errorf("datadog app_key is required when using api_key auth")
+	}
+	if cc.AppKey != "" && cc.APIKey == "" {
+		return nil, fmt.Errorf("datadog api_key is required when using app_key auth")
+	}
+
+	hasPAT := cc.Token != ""
+	hasAPIKey := cc.APIKey != "" && cc.AppKey != ""
+
+	if !hasPAT && !hasAPIKey {
+		return nil, fmt.Errorf("datadog auth is required: set either token (PAT) or both api_key and app_key")
 	}
 
 	cfg := datadog.NewConfiguration()
 
 	c := &Client{
-		token:        token,
-		site:         site,
-		orgSubdomain: orgSubdomain,
+		site:         cc.Site,
+		orgSubdomain: cc.OrgSubdomain,
 		cfg:          cfg,
 	}
 
-	// Inject a custom transport that adds Bearer auth for PAT
-	cfg.HTTPClient = &http.Client{
-		Timeout:   30 * time.Second,
-		Transport: &bearerTransport{token: token, base: http.DefaultTransport},
+	if hasPAT {
+		c.authMode = AuthPAT
+		c.token = cc.Token
+		cfg.HTTPClient = &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: &bearerTransport{token: cc.Token, base: http.DefaultTransport},
+		}
+	} else {
+		c.authMode = AuthAPIKey
+		c.apiKey = cc.APIKey
+		c.appKey = cc.AppKey
+		cfg.HTTPClient = &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: &rateLimitTransport{base: http.DefaultTransport},
+		}
 	}
 
 	apiClient := datadog.NewAPIClient(cfg)
@@ -91,11 +133,18 @@ func (c *Client) SetVerbose(v bool) {
 }
 
 func (c *Client) ctx() context.Context {
-	return context.WithValue(
+	ctx := context.WithValue(
 		context.Background(),
 		datadog.ContextServerVariables,
 		map[string]string{"site": c.site},
 	)
+	if c.authMode == AuthAPIKey {
+		ctx = context.WithValue(ctx, datadog.ContextAPIKeys, map[string]datadog.APIKey{
+			"apiKeyAuth": {Key: c.apiKey},
+			"appKeyAuth": {Key: c.appKey},
+		})
+	}
+	return ctx
 }
 
 func (c *Client) SearchErrorIssues(services []string, since string) ([]ErrorIssue, error) {
@@ -549,21 +598,35 @@ type RateLimitCallback func(info RateLimitInfo)
 // bearerTransport adds an Authorization: Bearer header to all requests
 // and optionally parses rate limit headers from responses.
 type bearerTransport struct {
-	token         string
-	base          http.RoundTripper
-	onRateLimit   RateLimitCallback
+	token       string
+	base        http.RoundTripper
+	onRateLimit RateLimitCallback
 }
 
 func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	req = req.Clone(req.Context())
 	req.Header.Set("Authorization", "Bearer "+t.token)
-	resp, err := t.base.RoundTrip(req)
+	return roundTripWithRateLimit(t.base, req, t.onRateLimit)
+}
+
+// rateLimitTransport wraps an http.RoundTripper to parse rate limit headers.
+// Used with API Key auth where the SDK handles auth via context.
+type rateLimitTransport struct {
+	base        http.RoundTripper
+	onRateLimit RateLimitCallback
+}
+
+func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return roundTripWithRateLimit(t.base, req, t.onRateLimit)
+}
+
+func roundTripWithRateLimit(base http.RoundTripper, req *http.Request, cb RateLimitCallback) (*http.Response, error) {
+	resp, err := base.RoundTrip(req)
 	if err != nil {
 		return resp, err
 	}
 
-	// Parse rate limit headers if callback is set and headers are present.
-	if t.onRateLimit != nil && resp.Header.Get("X-Ratelimit-Limit") != "" {
+	if cb != nil && resp.Header.Get("X-Ratelimit-Limit") != "" {
 		info := RateLimitInfo{
 			Name: resp.Header.Get("X-Ratelimit-Name"),
 		}
@@ -573,7 +636,7 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		var resetSec int
 		fmt.Sscanf(resp.Header.Get("X-Ratelimit-Reset"), "%d", &resetSec)
 		info.Reset = time.Duration(resetSec) * time.Second
-		t.onRateLimit(info)
+		cb(info)
 	}
 
 	return resp, err
@@ -581,7 +644,10 @@ func (t *bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // SetRateLimitCallback sets a function to be called with rate limit info from responses.
 func (c *Client) SetRateLimitCallback(cb RateLimitCallback) {
-	if bt, ok := c.cfg.HTTPClient.Transport.(*bearerTransport); ok {
-		bt.onRateLimit = cb
+	switch t := c.cfg.HTTPClient.Transport.(type) {
+	case *bearerTransport:
+		t.onRateLimit = cb
+	case *rateLimitTransport:
+		t.onRateLimit = cb
 	}
 }

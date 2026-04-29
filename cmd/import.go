@@ -24,7 +24,11 @@ var importCmd = &cobra.Command{
 
 		var ddClients []*datadog.Client
 		for i := range cfg.Datadog {
-			c, err := datadog.NewClient(cfg.Datadog[i].Token, cfg.Datadog[i].Site, cfg.Datadog[i].OrgSubdomain)
+			dd := &cfg.Datadog[i]
+			c, err := datadog.NewClient(datadog.ClientConfig{
+				Token: dd.Token, APIKey: dd.APIKey, AppKey: dd.AppKey,
+				Site: dd.Site, OrgSubdomain: dd.OrgSubdomain,
+			})
 			if err != nil {
 				return err
 			}

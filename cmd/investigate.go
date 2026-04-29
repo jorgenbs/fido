@@ -48,8 +48,11 @@ var investigateCmd = &cobra.Command{
 		if ddCfg == nil && len(cfg.Datadog) > 0 {
 			ddCfg = &cfg.Datadog[0]
 		}
-		if ddCfg != nil && ddCfg.Token != "" {
-			if c, err := datadog.NewClient(ddCfg.Token, ddCfg.Site, ddCfg.OrgSubdomain); err == nil {
+		if ddCfg != nil && ddCfg.HasAuth() {
+			if c, err := datadog.NewClient(datadog.ClientConfig{
+				Token: ddCfg.Token, APIKey: ddCfg.APIKey, AppKey: ddCfg.AppKey,
+				Site: ddCfg.Site, OrgSubdomain: ddCfg.OrgSubdomain,
+			}); err == nil {
 				c.SetVerbose(verbose)
 				ddClient = c
 			}

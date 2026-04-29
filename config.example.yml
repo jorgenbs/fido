@@ -2,9 +2,17 @@
 # Copy to ~/.fido/config.yml and fill in your values.
 
 datadog:
-  token: ""         # Datadog Personal Access Token (https://app.datadoghq.eu/personal-settings/personal-access-tokens)
+  # Authentication: use EITHER a Personal Access Token (token) OR API Key + App Key (api_key + app_key).
+  # PATs are not available on all Datadog plans.
+
+  # Option 1: Personal Access Token
+  token: ""         # Datadog PAT (https://app.datadoghq.eu/personal-settings/personal-access-tokens)
                     # Required scopes: error_tracking_read, apm_read
-                    # (apm_read is needed to fetch stack traces via the Spans API)
+
+  # Option 2: API Key + Application Key
+  # api_key: ""     # Datadog API Key (https://app.datadoghq.eu/organization-settings/api-keys)
+  # app_key: ""     # Datadog Application Key (https://app.datadoghq.eu/personal-settings/application-keys)
+
   site: "datadoghq.eu"   # Datadog site — NOT your org subdomain (e.g. use "datadoghq.eu", not "myorg.datadoghq.eu")
   services:         # Datadog service names to monitor
     - "my-service"
@@ -12,14 +20,15 @@ datadog:
 # Multi-site alternative — use named entries instead of a flat config:
 # datadog:
 #   work:
-#     token: ""
+#     token: ""                    # or use api_key + app_key instead
 #     site: "datadoghq.eu"
 #     org_subdomain: "myworkorg"
 #     services:
 #       - "svc-a"
 #       - "svc-b"
 #   personal:
-#     token: ""
+#     api_key: ""
+#     app_key: ""
 #     site: "datadoghq.com"
 #     services:
 #       - "svc-x"

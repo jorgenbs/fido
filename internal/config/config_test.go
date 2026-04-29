@@ -265,6 +265,61 @@ func TestDatadogConfigs_ForService(t *testing.T) {
 	}
 }
 
+func TestDatadogConfigs_APIKeyFlatFormat(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yml")
+
+	content := `
+datadog:
+  api_key: "my-api-key"
+  app_key: "my-app-key"
+  site: "datadoghq.com"
+  services:
+    - "svc-z"
+`
+	os.WriteFile(cfgPath, []byte(content), 0644)
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(cfg.Datadog) != 1 {
+		t.Fatalf("expected 1 datadog config, got %d", len(cfg.Datadog))
+	}
+	dd := cfg.Datadog[0]
+	if dd.APIKey != "my-api-key" {
+		t.Errorf("expected api_key 'my-api-key', got %q", dd.APIKey)
+	}
+	if dd.AppKey != "my-app-key" {
+		t.Errorf("expected app_key 'my-app-key', got %q", dd.AppKey)
+	}
+	if dd.Token != "" {
+		t.Errorf("expected empty token, got %q", dd.Token)
+	}
+}
+
+func TestDatadogConfig_HasAuth(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  DatadogConfig
+		want bool
+	}{
+		{"token", DatadogConfig{Token: "x"}, true},
+		{"api+app key", DatadogConfig{APIKey: "x", AppKey: "y"}, true},
+		{"no auth", DatadogConfig{}, false},
+		{"api key only", DatadogConfig{APIKey: "x"}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.cfg.HasAuth()
+			if got != tt.want {
+				t.Errorf("HasAuth() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoad_DuplicateServicesAcrossConfigs(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "config.yml")

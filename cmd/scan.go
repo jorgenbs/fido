@@ -43,7 +43,10 @@ var scanCmd = &cobra.Command{
 				}
 			}
 
-			ddClient, err := datadog.NewClient(ddCfg.Token, ddCfg.Site, ddCfg.OrgSubdomain)
+			ddClient, err := datadog.NewClient(datadog.ClientConfig{
+				Token: ddCfg.Token, APIKey: ddCfg.APIKey, AppKey: ddCfg.AppKey,
+				Site: ddCfg.Site, OrgSubdomain: ddCfg.OrgSubdomain,
+			})
 			if err != nil {
 				return err
 			}
